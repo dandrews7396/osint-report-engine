@@ -22,6 +22,8 @@ def parse_nessus(file_path: str) -> list[dict]:
             # Find all report items (vulnerabilities) for this host
             for item in report_host.findall('ReportItem'):
                 severity_val = item.attrib.get('severity', '0')
+                if severity_val == '0':
+                    continue
                 
                 # We usually ignore severity 0 (Info) for vulnerabilities,
                 # but we can let the user filter it in the UI. We'll parse all.

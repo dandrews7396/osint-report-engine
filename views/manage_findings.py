@@ -38,43 +38,59 @@ def show_manage_findings():
     findings = db.get_project_findings(project_id)
     if findings:
         for f in findings:
-            with st.expander(f"[{f['severity']}] {f['title']} (Host: {f.get('host', 'N/A')})"):
-                with st.form(f"edit_form_{f['id']}"):
-                    e_title = st.text_input("Title", value=f['title'])
-                    
-                    e_sev_options = ["Critical", "High", "Medium", "Low", "Info"]
-                    e_sev_index = e_sev_options.index(f['severity']) if f['severity'] in e_sev_options else 4
-                    e_sev = st.selectbox("Severity", e_sev_options, index=e_sev_index)
-                    
-                    col_h, col_p = st.columns(2)
-                    e_host = col_h.text_input("Host", value=f.get('host', ''))
-                    if is_web_app:
-                        e_path = col_p.text_input("Affected Path", value=f.get('path', ''))
-                    else:
-                        e_path = f.get('path', '')
-                    
-                    col_c, col_v = st.columns(2)
-                    e_cvss = col_c.number_input("CVSS", min_value=0.0, max_value=10.0, step=0.1, value=float(f.get('cvss') or 0.0))
-                    e_cvss_vector = col_v.text_input("CVSSv4 Vector String", value=f.get('cvss_vector', ''))
-                    
-                    e_desc = st.text_area("Description", value=f.get('description', ''))
-                    e_rem = st.text_area("Remediation", value=f.get('remediation', ''))
-                    e_refs = st.text_area("References (one URL per line)", value=f.get('refs', ''))
-                    
-                    st.markdown("**Steps to Reproduce & PoC**")
-                    jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "height": 400, "uploader": {"insertImageAsBase64URI": True}}
-                    safe_steps = sanitize_rich_html(restore_base64_images(f.get('steps_to_reproduce', '')))
-                    e_steps = st_jodit(value=safe_steps, config=jodit_config, key=f"e_steps_{f['id']}")
-                    
-                    if st.form_submit_button("Save Changes"):
-                        processed_steps = process_base64_images(sanitize_rich_html(e_steps), active_project['client_id'], project_id)
-                        db.update_project_finding(f['id'], e_title, e_sev, e_desc, e_rem, e_cvss, e_host, e_path, e_cvss_vector, e_refs, processed_steps)
-                        st.success("Saved!")
+            is_expanded = st.session_state.get('edit_finding_id') == f['id']
+            with st.expander(f"[{f['severity']}] {f['title']} (Host: {f.get('host', 'N/A')})", expanded=is_expanded):
+                if is_expanded:
+                    with st.form(f"edit_form_{f['id']}"):
+                        e_title = st.text_input("Title", value=f['title'])
+                        
+                        e_sev_options = ["Critical", "High", "Medium", "Low", "Info"]
+                        e_sev_index = e_sev_options.index(f['severity']) if f['severity'] in e_sev_options else 4
+                        e_sev = st.selectbox("Severity", e_sev_options, index=e_sev_index)
+                        
+                        col_h, col_p = st.columns(2)
+                        e_host = col_h.text_input("Host", value=f.get('host', ''))
+                        if is_web_app:
+                            e_path = col_p.text_input("Affected Path", value=f.get('path', ''))
+                        else:
+                            e_path = f.get('path', '')
+                        
+                        col_c, col_v = st.columns(2)
+                        e_cvss = col_c.number_input("CVSS", min_value=0.0, max_value=10.0, step=0.1, value=float(f.get('cvss') or 0.0))
+                        e_cvss_vector = col_v.text_input("CVSSv4 Vector String", value=f.get('cvss_vector', ''))
+                        
+                        e_desc = st.text_area("Description", value=f.get('description', ''))
+                        e_rem = st.text_area("Remediation", value=f.get('remediation', ''))
+                        e_refs = st.text_area("References (one URL per line)", value=f.get('refs', ''))
+                        
+                        st.markdown("**Steps to Reproduce & PoC**")
+                        jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "height": 400, "uploader": {"insertImageAsBase64URI": True}}
+                        safe_steps = sanitize_rich_html(restore_base64_images(f.get('steps_to_reproduce', '')))
+                        e_steps = st_jodit(value=safe_steps, config=jodit_config, key=f"e_steps_{f['id']}")
+                        
+                        if st.form_submit_button("Save Changes"):
+                            processed_steps = process_base64_images(sanitize_rich_html(e_steps), active_project['client_id'], project_id)
+                            db.update_project_finding(f['id'], e_title, e_sev, e_desc, e_rem, e_cvss, e_host, e_path, e_cvss_vector, e_refs, processed_steps)
+                            st.session_state.edit_finding_id = None
+                            st.success("Saved!")
+                            st.rerun()
+                            
+                    if st.button("Cancel Edit", key=f"cancel_find_{f['id']}"):
+                        st.session_state.edit_finding_id = None
                         st.rerun()
-                
-                if st.button("Delete Finding", key=f"del_find_{f['id']}"):
-                    db.delete_project_finding(f['id'])
-                    st.rerun()
+                else:
+                    st.write(f"**CVSS:** {f.get('cvss', 0.0)}")
+                    if f.get('path'):
+                        st.write(f"**Affected Path:** {f['path']}")
+                    st.write(f"**Description:** {f.get('description', '')}")
+                    
+                    col1, col2 = st.columns(2)
+                    if col1.button("Edit Finding", key=f"edit_find_btn_{f['id']}"):
+                        st.session_state.edit_finding_id = f['id']
+                        st.rerun()
+                    if col2.button("Delete Finding", key=f"del_find_{f['id']}"):
+                        db.delete_project_finding(f['id'])
+                        st.rerun()
     else:
         st.write("No findings yet.")
 
