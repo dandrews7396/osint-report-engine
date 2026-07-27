@@ -53,7 +53,7 @@ def parse_nessus(file_path: str) -> list[dict]:
                     
                 port = item.attrib.get('port', '0')
                 protocol = item.attrib.get('protocol', 'tcp')
-                host_str = f"{host}:{port} ({protocol})"
+                host_str = f"{host}:{port}"
                 
                 if title not in findings_map:
                     findings_map[title] = {
