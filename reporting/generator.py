@@ -99,11 +99,17 @@ def generate_report(project, client, firm, findings, output_path):
             bg_color = color_map.get(sev, '#555')
             
             host = finding.get('host', '')
-            host_display = host if host else 'N/A'
-            if host_display.startswith('http'):
-                host_html = f'<a href="{host_display}" style="color: #fff; text-decoration: underline;">{host_display}</a>'
+            if not host:
+                host_html = 'N/A'
             else:
-                host_html = host_display
+                hosts = [h.strip() for h in host.split(',') if h.strip()]
+                host_links = []
+                for h in hosts:
+                    if h.startswith('http'):
+                        host_links.append(f'<a href="{h}" style="color: #fff; text-decoration: underline;">{h}</a>')
+                    else:
+                        host_links.append(h)
+                host_html = '<br>'.join(host_links) if host_links else 'N/A'
                 
             title_slug = finding['anchor']
             title_html = f'<a href="#{title_slug}" style="color: #6b46c1; text-decoration: underline;">{finding["title"]}</a>'
@@ -179,7 +185,14 @@ def generate_report(project, client, firm, findings, output_path):
 
 {% if finding.cvss_vector %}**CVSSv4 Vector String:** {{ finding.cvss_vector }}<br>
 {% endif %}
-{% if finding.host %}**Affected Host:** {{ finding.host }}<br>
+{% if finding.host %}
+{% set hosts = finding.host.split(',') %}
+{% if hosts|length > 1 %}**Affected Hosts:**
+{% for h in hosts %}
+- {{ h.strip() }}
+{% endfor %}
+{% else %}**Affected Host:** {{ finding.host }}<br>
+{% endif %}
 {% endif %}
 {% if finding.path %}**Affected Path:** {{ finding.path }}<br>
 {% endif %}
