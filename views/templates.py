@@ -10,7 +10,8 @@ def show_templates():
         "Internal Network Penetration Test",
         "External Network Penetration Test",
         "AI/LLM Penetration Test",
-        "Cloud Penetration Test"
+        "Cloud Penetration Test",
+        "OSINT Research"
     ]
     
     selected_type = st.selectbox("Select Project Type to Edit", project_types)

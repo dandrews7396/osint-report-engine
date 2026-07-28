@@ -53,10 +53,10 @@ def main():
             show_login()
         return
 
-    logo_b64 = get_image_base64("assets/KairosSecLogo.png")
-    st.sidebar.markdown(f'<a href="https://kairos-sec.com" target="_blank"><img src="data:image/png;base64,{logo_b64}" alt="Kairos Sec" width="75%" style="margin-bottom: 20px;"></a>', unsafe_allow_html=True)
-    st.sidebar.title("Kairos Report Engine")
-    menu = ["Dashboard", "Manage Projects", "Add Findings", "Vuln Library", "Generate Report", "Templates", "Profile", "Admin: Users", "Logout"]
+    logo_b64 = get_image_base64("assets/DIILogo.png")
+    st.sidebar.markdown(f'<a href="https://kairos-sec.com" target="_blank"><img src="data:image/png;base64,{logo_b64}" alt="SEROCU DII" width="75%" style="margin-bottom: 20px;"></a>', unsafe_allow_html=True)
+    st.sidebar.title("DII Report Engine")
+    menu = ["Dashboard", "Manage Projects", "Add Findings", "Finding Library", "Generate Report", "Templates", "Profile", "Admin: Users", "Logout"]
     
     if "nav" not in st.session_state:
         st.session_state.nav = "Dashboard"
@@ -76,7 +76,7 @@ def main():
         show_manage_projects()
     elif st.session_state.nav == "Add Findings":
         show_manage_findings()
-    elif st.session_state.nav == "Vuln Library":
+    elif st.session_state.nav == "Finding Library":
         show_vuln_library()
     elif st.session_state.nav == "Generate Report":
         show_generate_report()

@@ -6,15 +6,34 @@ from streamlit_jodit import st_jodit
 from utils.helpers import sanitize_rich_html
 
 def show_vuln_library():
-    st.title("Vulnerability Library")
-    st.write("Maintain a centralized repository of common vulnerabilities. You can manually add entries or bulk import CSVs to quickly populate your library, making it easier to pull standardized findings directly into your active projects.")
+    st.title("Finding Library")
+    st.write("Maintain a centralized repository of common Findings. You can manually add entries or bulk import CSVs to quickly populate your library, making it easier to pull standardized findings directly into your active projects.")
     
     project_types = [
         "Web Application Penetration Test",
         "Internal Network Penetration Test",
         "External Network Penetration Test",
         "AI/LLM Penetration Test",
-        "Cloud Penetration Test"
+        "Cloud Penetration Test",
+        "OSINT Research"
+    ]
+
+    pentest_severities = [
+        "Critical",
+        "High",
+        "Medium",
+        "Low",
+        "Info"
+    ]
+
+    osint_severeties = [
+        "Almost Certain",
+        "Highly Likely",
+        "Likely",
+        "Realistic Possibility",
+        "Unlikely",
+        "Highly Unlikely",
+        "Remote Chance"
     ]
 
     st.subheader("Bulk Import Vulnerabilities")
@@ -53,7 +72,7 @@ def show_vuln_library():
                             svc_type = "Web Application Penetration Test"
                             
                         sev = row.get("Severity", "Info").strip()
-                        if sev not in ["Critical", "High", "Medium", "Low", "Info"]:
+                        if sev not in pentest_severities + osint_severeties:
                             sev = "Info"
                             
                         try:
@@ -71,21 +90,35 @@ def show_vuln_library():
                         db.add_to_vuln_library(title, sev, desc, rem, cvss, cve, steps, svc_type, cvss_vector, refs)
                         count += 1
                         
-                    st.success(f"Successfully imported {count} vulnerabilities into the library!")
+                    st.success(f"Successfully imported {count} Findings into the library!")
                     st.rerun()
             except Exception as e:
                 st.error(f"Error parsing CSV: {e}")
 
     st.divider()
 
-    st.subheader("Add Vulnerability Manually")
+    st.subheader("Add Finding Manually")
     with st.form("add_vuln_lib"):
         v_service_type = st.selectbox("Service Type", project_types)
         v_title = st.text_input("Title")
-        v_sev = st.selectbox("Severity", ["Critical", "High", "Medium", "Low", "Info"])
-        v_cvss = st.number_input("CVSS Score", min_value=0.0, max_value=10.0, step=0.1)
-        v_cvss_vector = st.text_input("CVSSv4 Vector String")
-        v_cve = st.text_input("CVE ID (optional)")
+        if v_service_type == project_types[5]:
+            v_sev = st.selectbox("Severity", [
+                "Almost Certain",
+                "Highly Likely",
+                "Likely",
+                "Realistic Possibility",
+                "Unlikely",
+                "Highly Unlikely",
+                "Remote Chance"]
+                )
+            v_cvss = 0.0
+            v_cvss_vector = ''
+            v_cve = ''
+        else:
+            v_sev = st.selectbox("Severity", ["Critical", "High", "Medium", "Low", "Info"])
+            v_cvss = st.number_input("CVSS Score", min_value=0.0, max_value=10.0, step=0.1)
+            v_cvss_vector = st.text_input("CVSSv4 Vector String")
+            v_cve = st.text_input("CVE ID (optional)")
         v_desc = st.text_area("Description")
         st.markdown("**Steps to Reproduce**")
         jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "placeholder": "Write your steps to reproduce here (you can paste images)...", "height": 400, "uploader": {"insertImageAsBase64URI": True}}
@@ -115,16 +148,30 @@ def show_vuln_library():
                     e_service_type = st.selectbox("Service Type", project_types, index=e_service_type_idx)
                     
                     e_title = st.text_input("Title", value=v['title'])
-                    
-                    e_sev_options = ["Critical", "High", "Medium", "Low", "Info"]
-                    e_sev_index = e_sev_options.index(v['severity']) if v['severity'] in e_sev_options else 4
-                    e_sev = st.selectbox("Severity", e_sev_options, index=e_sev_index)
-                    
-                    col_c, col_v = st.columns(2)
-                    e_cvss = col_c.number_input("CVSS", min_value=0.0, max_value=10.0, step=0.1, value=float(v.get('cvss') or 0.0))
-                    e_cvss_vector = col_v.text_input("CVSSv4 Vector String", value=v.get('cvss_vector', ''))
-                    
-                    e_cve = st.text_input("CVE ID", value=v.get('cve', ''))
+                    if e_service_type_idx == 5:
+                        e_sev_options = [
+                            "Almost Certain",
+                            "Highly Likely",
+                            "Likely",
+                            "Realistic Possibility",
+                            "Unlikely",
+                            "Highly Unlikely",
+                            "Remote Chance"]
+                        e_sev_index = e_sev_options.index(v['severity']) if v['severity'] in e_sev_options else 6
+                        e_sev = st.selectbox("Confidence", e_sev_options, index=e_sev_index)
+                        e_cvss = 0.0
+                        e_cvss_vector = ''
+                        e_cve = ''
+                    else:
+                        e_sev_options = ["Critical", "High", "Medium", "Low", "Info"]
+                        e_sev_index = e_sev_options.index(v['severity']) if v['severity'] in e_sev_options else 4
+                        e_sev = st.selectbox("Severity", e_sev_options, index=e_sev_index)
+                        
+                        col_c, col_v = st.columns(2)
+                        e_cvss = col_c.number_input("CVSS", min_value=0.0, max_value=10.0, step=0.1, value=float(v.get('cvss') or 0.0))
+                        e_cvss_vector = col_v.text_input("CVSSv4 Vector String", value=v.get('cvss_vector', ''))
+
+                        e_cve = st.text_input("CVE ID", value=v.get('cve', ''))
                     
                     e_desc = st.text_area("Description", value=v.get('description', ''))
                     
@@ -153,9 +200,9 @@ def show_vuln_library():
                 st.write(f"**Description:** {v['description']}")
                 
                 col1, col2 = st.columns(2)
-                if col1.button("Edit Vulnerability", key=f"edit_vuln_btn_{v['id']}"):
+                if col1.button("Edit Finding", key=f"edit_vuln_btn_{v['id']}"):
                     st.session_state.edit_vuln_lib_id = v['id']
                     st.rerun()
-                if col2.button("Delete Vulnerability", key=f"del_vuln_{v['id']}"):
+                if col2.button("Delete Finding", key=f"del_vuln_{v['id']}"):
                     db.delete_from_vuln_library(v['id'])
                     st.rerun()
