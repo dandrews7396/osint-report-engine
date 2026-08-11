@@ -3,7 +3,7 @@
 # Create certs directory
 mkdir -p certs
 
-echo "Generating self-signed SSL certificates for Kairos Report Engine..."
+echo "Generating self-signed SSL certificates for Osint Report Engine..."
 
 # Generate a new private key and self-signed certificate valid for 365 days
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \

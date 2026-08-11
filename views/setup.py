@@ -3,8 +3,8 @@ from database.db import add_user
 from utils.auth import ph
 
 def show_setup():
-    st.title("Kairos First-Time Setup")
-    st.write("Welcome to Kairos Report Engine. Since there are no users in the system, you must create the initial Administrator account.")
+    st.title("Osint First-Time Setup")
+    st.write("Welcome to Osint Report Engine. Since there are no users in the system, you must create the initial Administrator account.")
     
     with st.form("setup_form"):
         username = st.text_input("Administrator Username")

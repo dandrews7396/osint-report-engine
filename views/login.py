@@ -13,7 +13,7 @@ from utils.auth import ph, get_cookie_controller, sign_token
 _DUMMY_HASH = ph.hash("kairos_constant_time_placeholder")
 
 def show_login():
-    st.title("Kairos Login")
+    st.title("Osint Login")
     
     if 'mfa_user' in st.session_state:
         st.info("MFA Token Required")

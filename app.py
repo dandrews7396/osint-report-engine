@@ -56,7 +56,7 @@ def main():
         return
 
     logo_b64 = get_image_base64("assets/DIILogo.png")
-    st.sidebar.markdown(f'<a href="https://kairos-sec.com" target="_blank"><img src="data:image/png;base64,{logo_b64}" alt="DII" width="75%" style="margin-bottom: 20px;"></a>', unsafe_allow_html=True)
+    st.sidebar.markdown(f'<a href="https://osint-sec.com" target="_blank"><img src="data:image/png;base64,{logo_b64}" alt="DII" width="75%" style="margin-bottom: 20px;"></a>', unsafe_allow_html=True)
     st.sidebar.title("OSINT Intelligence Engine")
     
     # Navigation menu reflecting OSINT domain views

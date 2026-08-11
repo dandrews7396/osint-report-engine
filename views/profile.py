@@ -41,7 +41,7 @@ def show_profile():
         if 'mfa_setup_secret' in st.session_state:
             secret = st.session_state.mfa_setup_secret
             totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
-                name=st.session_state.username, issuer_name="Kairos Report Engine"
+                name=st.session_state.username, issuer_name="Osint Report Engine"
             )
             
             qr = qrcode.make(totp_uri)

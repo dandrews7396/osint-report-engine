@@ -1,29 +1,26 @@
-# Kairos Report Engine
+# Osint Report Engine
 
 You should only run this application locally or on a trusted, secure network. **It MUST NOT be exposed to the public internet.**
 
 ### Support
-This is open source and free. Do not contact me if you can't get it working, I don't have time to provide support for this. Review the code, and open a PR. I made this primarily for me but made it open source to help others... but I do not provide support. Use at your own risk, no warranty
+This is open source and free. Do not contact me if you can't get it working, I don't have time to provide support for this. Review the code, and open a PR. I do not provide support. Use at your own risk, no warranty
 
-#### Bug Bounty
-I was temporarily doing a basic bug bounty for the Hack Smarter community (valid bugs get vouchers). As of today (7/18) this is discontinued due to lack of time. App is only meant to run locally and never be exposed to the internet.
+## Osint Report Engine
+Osint Report Engine is a web application designed to streamline OSINT research project management, findings tracking, and automated report generation. 
 
-## Kairos Report Engine
-Kairos Report Engine is a web application designed to streamline penetration testing project management, vulnerability tracking, and automated report generation. 
+It provides a centralized dashboard to track clients, manage cases across various domain categories (e.g., Corporate Governance, Infrastructure, Dark Web), maintain a global risk library, and automatically generate professional, well-formatted PDF reports and Attestation Letters.
 
-It provides a centralized dashboard to track clients, manage projects across various service types (e.g., Web Application, Internal Network, Cloud), maintain a global vulnerability library, and automatically generate professional, well-formatted PDF reports and Attestation Letters.
-
-#### Note from Tyler
-I actively use this for engagements at Kairos Sec. Expect regular updates and new features. If you have any ideas, open an "Issue" with a feature request and I'll consider adding it. 
+#### Note from Dan
+This project was forked and refactored from the kairos-reporting-engine. All kudos should go to Tyler for Open Sourcing an awesome tool. I plan to actively use this for research at my day job. Where possible, I will attempt to integrate new features that Tyler releases for his project, and some of my own as I identify anything useful. If you have any ideas, open an "Issue" with a feature request and I'll consider adding it. 
 
 ## Key Features
 
 - **PDF Generation**: Export highly customized, professional PDF reports and formal Attestation Letters powered by Jinja2 and WeasyPrint.
 
 - **Rich Text Editor**: Utilize a built-in rich text editor for writing comprehensive "Steps to Reproduce" and embedding proof-of-concept images.
-- **Finding Imports**: Seamlessly parse and import scanner outputs from Nessus (.nessus) and Burp Suite (XML).
+- **Finding Imports**: This has been removed for now, but plan is to integrate importing findings in JSON format from tools like OSINT Industries.
 - **Secure Authentication**: Built-in User Management, Passphrase Hashing (Argon2), and Multi-Factor Authentication (TOTP via Google Authenticator/Authy).
-- **Vulnerability Library**: Maintain a global library of common vulnerabilities with support for bulk CSV import/export.
+- **Risk Library**: Maintain a global library of common vulnerabilities with support for bulk CSV import/export.
 - **Production Ready**: Ships with a utility to generate SSL certificates and runs securely on HTTPS port 443 with Streamlit telemetry and dev tools disabled.
 
 ## Prerequisites
@@ -46,8 +43,8 @@ The easiest way to run the application. Docker handles all system dependencies (
 ### Quick Start with Docker Compose
 
 ```bash
-git clone https://github.com/TeneBrae93/kairos-report-engine.git
-cd kairos-report-engine
+git clone https://github.com/dandrews7396/osint-report-engine.git
+cd osint-report-engine
 docker compose up -d
 ```
 
@@ -61,9 +58,9 @@ Three named Docker volumes keep your data safe across container restarts:
 
 | Volume | Contents |
 |---|---|
-| `kairos-data` | SQLite database (`kairos.db`) |
-| `kairos-reports` | Generated PDF reports |
-| `kairos-certs` | SSL certificates |
+| `osint-data` | SQLite database (`osint.db`) |
+| `osint-reports` | Generated PDF reports |
+| `osint-certs` | SSL certificates |
 
 ### Useful Commands
 
@@ -86,8 +83,8 @@ docker compose up -d --build
 You can inject your own certificates into the volume before starting the container:
 
 ```bash
-docker volume create kairos-certs
-docker run --rm -v kairos-certs:/certs -v $(pwd)/my-certs:/src alpine \
+docker volume create osint-certs
+docker run --rm -v osint-certs:/certs -v $(pwd)/my-certs:/src alpine \
     sh -c "cp /src/cert.pem /certs/cert.pem && cp /src/key.pem /certs/key.pem"
 docker compose up -d
 ```
@@ -99,8 +96,8 @@ docker compose up -d
 To quickly set up and launch the application from scratch, you can copy and paste this entire block into your terminal (assuming you have the prerequisites installed):
 
 ```bash
-git clone https://github.com/TeneBrae93/kairos-report-engine.git
-cd kairos-report-engine
+git clone https://github.com/TeneBrae93/osint-report-engine.git
+cd osint-report-engine
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -149,14 +146,14 @@ This will start the local Streamlit server. Navigate your web browser to `https:
 - `parsers/`: Contains parsing scripts for integrating external scanner outputs (e.g., Nessus, Burp Suite).
 - `reporting/`: Contains the PDF generation engine (`generator.py`) utilizing WeasyPrint.
 - `templates/`: Contains HTML/Markdown templates used for styling and formatting the generated PDF reports.
-- `data/`: The default directory where the SQLite database (`kairos.db`) and temporary files are stored.
+- `data/`: The default directory where the SQLite database (`osint.db`) and temporary files are stored.
 - `reports/`: The default directory where generated PDF reports are saved.
 - `certs/`: Directory containing your SSL certificates for HTTPS access.
 - `.streamlit/`: Contains the configuration file to enforce port 443 and disable Streamlit analytics.
 
 ## Database Note
 
-The application uses a local SQLite database (`data/kairos.db`). On the first run, the database and necessary tables will be created automatically.
+The application uses a local SQLite database (`data/osint.db`). On the first run, the database and necessary tables will be created automatically.
 
 ## License
 
