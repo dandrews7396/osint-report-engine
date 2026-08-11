@@ -2,130 +2,136 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ project.name }} - Penetration Test Report</title>
+    <title>{{ case.case_name }} - OSINT Intelligence Report</title>
     <style>
-        /* PDF specific CSS for WeasyPrint */
         @page {
             size: A4;
-            margin: 2.5cm 2cm 2.5cm 2cm;
-            @top-right {
-                content: "Strictly Confidential";
-                color: #666;
-                font-size: 10pt;
+            margin: 20mm 15mm 20mm 15mm;
+            @bottom-left {
+                content: "CONFIDENTIAL | {{ firm.name }}";
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 8pt;
+                color: #718096;
             }
             @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
-                font-size: 10pt;
-                color: #666;
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 8pt;
+                color: #718096;
             }
-            @bottom-left {
-                content: "{{ firm.firm_name }}";
-                font-size: 10pt;
-                color: #666;
-            }
-        }
-        
-        h1, h2, h3 {
-            page-break-after: avoid;
-        }
-        
-        @page:first {
-            @top-right { content: normal; }
-            @bottom-right { content: normal; }
-            @bottom-left { content: normal; }
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-size: 11pt;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 10pt;
             line-height: 1.6;
-            color: #333;
+            color: #2d3748;
         }
 
-        h1, h2, h3, h4 { color: #1a202c; page-break-after: avoid; }
-        h1 { font-size: 24pt; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-        h1:first-of-type { page-break-before: avoid; }
-        h2 { font-size: 18pt; margin-top: 1.5em; }
-        h3 { font-size: 14pt; margin-top: 1em; }
-        
+        h1 {
+            font-size: 24pt;
+            color: #1a202c;
+            border-bottom: 3px solid #2b6cb0;
+            padding-bottom: 10px;
+            margin-top: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h2 {
+            font-size: 15pt;
+            color: #2b6cb0;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 6px;
+            margin-top: 25px;
+        }
+
+        h3 {
+            font-size: 12pt;
+            color: #2d3748;
+            margin-top: 20px;
+        }
+
+        a {
+            color: #3182ce;
+            text-decoration: none;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        th, td {
-            border: 1px solid #e2e8f0;
-            padding: 8px;
-            text-align: left;
-        }
-        th { background-color: #edf2f7; font-weight: bold; }
-        
-        /* Tools Table Specific Styles */
-        .tools-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        .tools-table th, .tools-table td {
-            border: 1px solid #333;
-            padding: 10px;
-        }
-        .tools-table th {
-            background-color: #555;
-            color: white;
-            font-weight: bold;
-            text-align: center;
-        }
-        .tools-table td:first-child {
-            font-weight: bold;
-            text-align: center;
-            vertical-align: middle;
-            width: 25%;
-        }
-        .tools-table td:last-child {
-            text-align: left;
-            vertical-align: top;
-        }
-        
-        .severity-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 10pt;
-            color: white;
-            text-transform: uppercase;
+            margin: 15px 0;
+            font-size: 9.5pt;
         }
 
-        .Critical { background-color: #9b2c2c; }
-        .High { background-color: #c53030; }
-        .Medium { background-color: #dd6b20; }
-        .Low { background-color: #38a169; }
-        .Informational, .Info { background-color: #3182ce; }
-        /* Table of Contents Styles */
-        .toc ul {
-            list-style-type: none;
-            padding: 0;
+        th, td {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e0;
+            text-align: left;
         }
-        .toc ul ul {
-            padding-left: 20px;
+
+        th {
+            background-color: #2d3748;
+            color: #ffffff;
+            font-weight: bold;
         }
-        .toc li {
-            margin-bottom: 5px;
+
+        .tools-table th {
+            background-color: #2b6cb0;
         }
-        .toc a {
-            text-decoration: none;
-            color: inherit;
-            display: block; /* Helps ensure leader fills the line */
+
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            font-weight: bold;
+            font-size: 8.5pt;
+            color: #ffffff;
+            border-radius: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        .toc a::after {
-            content: leader('.') target-counter(attr(href), page);
+
+        .risk-badge.Critical { background-color: #9b2c2c; }
+        .risk-badge.High { background-color: #c53030; }
+        .risk-badge.Medium { background-color: #dd6b20; }
+        .risk-badge.Low { background-color: #38a169; }
+        .risk-badge.Informational { background-color: #3182ce; }
+
+        blockquote {
+            background: #f7fafc;
+            border-left: 4px solid #3182ce;
+            margin: 15px 0;
+            padding: 10px 15px;
+            font-style: italic;
+            color: #4a5568;
         }
-        
-        /* Markdown generated content styles */
-        .markdown-content img, img { max-width: 100%; height: auto; border: 1px solid #ccc; margin-top: 10px; border-radius: 4px; }
-        pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
-        code { font-family: monospace; background: #f4f4f4; padding: 2px 4px; border-radius: 2px;}
+
+        code, pre {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #edf2f7;
+            border-radius: 3px;
+        }
+
+        pre {
+            padding: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 8.5pt;
+            border: 1px solid #e2e8f0;
+        }
+
+        .markdown-content pre {
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+
+        hr {
+            border: 0;
+            height: 1px;
+            background: #e2e8f0;
+            margin: 25px 0;
+        }
     </style>
 </head>
 <body>

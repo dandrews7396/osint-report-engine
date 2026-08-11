@@ -1,27 +1,43 @@
-To Whom It May Concern,
+<div style="text-align: center; margin-bottom: 30px;">
 
-This letter certifies that {{ firm.firm_name }} performed a comprehensive Penetration Test for {{ client.name }}. The assessment was conducted from {{ project.start_date_formatted }} through {{ project.end_date_formatted }}. 
+# ATTESTATION OF OSINT ASSESSMENT
+**Formal Letter of Intelligence Investigation**
 
-The testing was performed by {{ tester.name }}. {{ tester.description }}
-
-**Scope and Methodology** 
-<br>
-The assessment covered the {{ client.name }} {{ project.application_name }} environment and its associated functionalities.
-
-The assessment followed a comprehensive methodology based on industry-recognized standards, including the OWASP Web Security Testing Guide (WSTG) and the Penetration Testing Execution Standard (PTES), tailored specifically to the application.
-
-**Conclusion**
-<br>
-Based on the testing performed, {{ firm.firm_name }} confirms that {{ client.name }} has subjected the {{ project.application_name }} application to a rigorous security assessment. The organization has demonstrated a strong commitment to security by engaging in proactive testing and maintaining robust foundational controls.
-
-This attestation represents a point-in-time assessment of the environment as it existed during the testing window.
-
-Sincerely,
-
-<div style="font-family: 'Alex Brush', cursive; font-size: 16pt; margin-top: 15px; margin-bottom: 5px; color: #333;">
-{{ tester.name }}
 </div>
 
-**{{ tester.name }}**<br>
-{{ tester.title }}<br>
-{{ firm.firm_name }}
+**Date:** {{ case.report_date_formatted }}  
+**Case Reference:** {{ case.case_ref }}  
+**Client:** {{ client.name }}  
+
+---
+
+### To Whom It May Concern,
+
+This letter confirms that **{{ firm.name }}** was formally retained by **{{ client.name }}** to perform an Open Source Intelligence (OSINT) assessment under the following parameters:
+
+> **Target Scope:** {{ case.target_scope or case.case_name }}  
+> **Investigation Window:** {{ case.start_date_formatted }} through {{ case.end_date_formatted }}  
+> **Assessment Category:** {{ case.case_type }}  
+
+### Compliance & Methodology Statement
+All collection and analysis procedures were conducted exclusively against publicly available information sources in accordance with OSINT standards and supported by a established **Legitimate Interest** framework. No invasive network penetration, illegal access, or non-public data intrusion took place.
+
+### Summary
+The assessment analyzed open digital footprints, public domain records, external exposure points, and associated risk factors. An executive intelligence report containing detailed evidence artifacts and recommended risk mitigations has been delivered directly to **{{ client.name }}**.
+
+### Authorizing Investigator
+
+**{{ investigator.name }}**  
+{% if investigator.title %}{{ investigator.title }}<br>{% endif %}
+*{{ firm.name }}*
+
+{% if investigator.description %}
+*Investigator Bio:*  
+{{ investigator.description }}
+{% endif %}
+
+---
+
+<div style="margin-top: 40px; font-size: 0.85em; color: #718096; text-align: center;">
+This attestation letter verifies that an OSINT evaluation was executed for the specified scope. It does not represent a guarantee regarding undisclosed offline activities or unindexed threat vectors.
+</div>
