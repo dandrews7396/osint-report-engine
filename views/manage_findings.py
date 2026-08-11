@@ -1,209 +1,192 @@
 import streamlit as st
-import os
 from database import operations as db
 from streamlit_jodit import st_jodit
-from parsers.nessus import parse_nessus
-from parsers.burp import parse_burp
 from utils.helpers import process_base64_images, restore_base64_images, sanitize_rich_html
 
 def show_manage_findings():
-    st.title("Add Findings")
-    st.write("Populate your project with specific security findings. You can manually create findings, import standardized issues directly from your Vulnerability Library, or automatically ingest raw XML output from Nessus and Burp Suite scanners.")
-    projects = db.get_projects()
+    st.title("Case Findings & Intelligence")
+    st.write("Populate your cases with verified OSINT findings. You can manually enter findings with digital evidence details or import standardized threat vectors directly from your OSINT Risk Library.")
+    
+    cases = db.get_cases()
     active_client_id = st.session_state.get('active_client_id')
     if active_client_id:
-        projects = [p for p in projects if p['client_id'] == active_client_id]
+        cases = [c for c in cases if c['client_id'] == active_client_id]
         
-    if not projects:
-        st.warning("Please create a project for the active client first.")
+    if not cases:
+        st.warning("Please create a case for the active client first.")
         return
         
-    project_options = {f"{p['name']} (Client: {p['client_name']})": p['id'] for p in projects}
-    project_options_list = list(project_options.keys())
+    case_options = {f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})": c['id'] for c in cases}
+    case_options_list = list(case_options.keys())
+    
     default_index = 0
-    if 'manage_findings_project_id' in st.session_state:
-        for i, p_name in enumerate(project_options_list):
-            if project_options[p_name] == st.session_state.manage_findings_project_id:
+    if 'manage_findings_case_id' in st.session_state:
+        for i, c_name in enumerate(case_options_list):
+            if case_options[c_name] == st.session_state.manage_findings_case_id:
                 default_index = i
                 break
                 
-    selected_project = st.selectbox("Select Project to manage findings", project_options_list, index=default_index)
-    project_id = project_options[selected_project]
+    selected_case_label = st.selectbox("Select Active Case", case_options_list, index=default_index)
+    case_id = case_options[selected_case_label]
+    active_case = next((c for c in cases if c['id'] == case_id), None)
     
-    active_project = next((p for p in projects if p['id'] == project_id), None)
-    is_web_app = active_project and active_project.get('project_type') == 'Web Application Penetration Test'
+    DOMAIN_CATEGORIES = [
+        "Identity & PII",
+        "Corporate Governance & Ownership",
+        "Infrastructure & Network Assets",
+        "Social Media & Digital Footprint",
+        "Financial & Asset Tracing",
+        "Dark Web & Leaked Data",
+        "Geopolitical & Physical Security",
+        "Custom Category"
+    ]
     
+    RISK_LEVELS = ["Critical", "High", "Medium", "Low", "Informational"]
+    CONFIDENCE_LEVELS = ["High Confidence", "Moderate Confidence", "Low Confidence", "Unverified"]
+
     st.divider()
-    st.subheader("Current Project Findings")
-    findings = db.get_project_findings(project_id)
+    st.subheader("Current Case Intelligence Findings")
+    
+    findings = db.get_case_findings(case_id)
     if findings:
         for f in findings:
             is_expanded = st.session_state.get('edit_finding_id') == f['id']
-            with st.expander(f"[{f['severity']}] {f['title']} (Host: {f.get('host', 'N/A')})", expanded=is_expanded):
+            with st.expander(f"[{f['risk_level']}] {f['title']} ({f.get('domain_category', 'General')})", expanded=is_expanded):
                 if is_expanded:
                     with st.form(f"edit_form_{f['id']}"):
-                        e_title = st.text_input("Title", value=f['title'])
+                        e_title = st.text_input("Finding Title", value=f['title'])
                         
-                        e_sev_options = ["Critical", "High", "Medium", "Low", "Info"]
-                        e_sev_index = e_sev_options.index(f['severity']) if f['severity'] in e_sev_options else 4
-                        e_sev = st.selectbox("Severity", e_sev_options, index=e_sev_index)
+                        col_cat, col_risk, col_conf = st.columns(3)
+                        cat_idx = DOMAIN_CATEGORIES.index(f['domain_category']) if f['domain_category'] in DOMAIN_CATEGORIES else 0
+                        e_category = col_cat.selectbox("Domain Category", DOMAIN_CATEGORIES, index=cat_idx)
                         
-                        col_h, col_p = st.columns(2)
-                        e_host = col_h.text_input("Host", value=f.get('host', ''))
-                        if is_web_app:
-                            e_path = col_p.text_input("Affected Path", value=f.get('path', ''))
-                        else:
-                            e_path = f.get('path', '')
+                        risk_idx = RISK_LEVELS.index(f['risk_level']) if f['risk_level'] in RISK_LEVELS else 2
+                        e_risk = col_risk.selectbox("Risk Level", RISK_LEVELS, index=risk_idx)
                         
-                        col_c, col_v = st.columns(2)
-                        e_cvss = col_c.number_input("CVSS", min_value=0.0, max_value=10.0, step=0.1, value=float(f.get('cvss') or 0.0))
-                        e_cvss_vector = col_v.text_input("CVSSv4 Vector String", value=f.get('cvss_vector', ''))
+                        conf_idx = CONFIDENCE_LEVELS.index(f.get('source_confidence', 'High Confidence')) if f.get('source_confidence') in CONFIDENCE_LEVELS else 0
+                        e_conf = col_conf.selectbox("Source Confidence", CONFIDENCE_LEVELS, index=conf_idx)
                         
-                        e_desc = st.text_area("Description", value=f.get('description', ''))
-                        e_rem = st.text_area("Remediation", value=f.get('remediation', ''))
-                        e_refs = st.text_area("References (one URL per line)", value=f.get('refs', ''))
+                        e_summary = st.text_area("Executive Summary", value=f.get('summary', '') or '', height=100)
                         
-                        st.markdown("**Steps to Reproduce & PoC**")
-                        jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "height": 400, "uploader": {"insertImageAsBase64URI": True}}
-                        safe_steps = sanitize_rich_html(restore_base64_images(f.get('steps_to_reproduce', '')))
-                        e_steps = st_jodit(value=safe_steps, config=jodit_config, key=f"e_steps_{f['id']}")
+                        st.markdown("**Detailed Findings & Intelligence Analysis**")
+                        jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "height": 350, "uploader": {"insertImageAsBase64URI": True}}
+                        safe_details = sanitize_rich_html(restore_base64_images(f.get('detailed_findings', '') or ''))
+                        e_details = st_jodit(value=safe_details, config=jodit_config, key=f"e_details_{f['id']}")
+                        
+                        st.markdown("**Digital Evidence & Provenance**")
+                        col_e1, col_e2 = st.columns(2)
+                        e_url = col_e1.text_input("Evidence URL / Archive Link", value=f.get('evidence_url', '') or '')
+                        e_hash = col_e2.text_input("Evidence File SHA-256 Hash", value=f.get('evidence_hash_sha256', '') or '')
+                        e_citation = st.text_input("Source Citation / Document Reference", value=f.get('source_citation', '') or '')
                         
                         if st.form_submit_button("Save Changes"):
-                            processed_steps = process_base64_images(sanitize_rich_html(e_steps), active_project['client_id'], project_id)
-                            db.update_project_finding(f['id'], e_title, e_sev, e_desc, e_rem, e_cvss, e_host, e_path, e_cvss_vector, e_refs, processed_steps)
+                            processed_details = process_base64_images(sanitize_rich_html(e_details), active_case['client_id'], case_id)
+                            db.update_case_finding(
+                                f['id'], 
+                                e_category, 
+                                e_title, 
+                                e_risk, 
+                                e_conf, 
+                                e_summary, 
+                                processed_details, 
+                                e_url, 
+                                e_hash, 
+                                e_citation
+                            )
                             st.session_state.edit_finding_id = None
-                            st.success("Saved!")
+                            st.success("Finding updated!")
                             st.rerun()
                             
                     if st.button("Cancel Edit", key=f"cancel_find_{f['id']}"):
                         st.session_state.edit_finding_id = None
                         st.rerun()
                 else:
-                    st.write(f"**CVSS:** {f.get('cvss', 0.0)}")
-                    if f.get('path'):
-                        st.write(f"**Affected Path:** {f['path']}")
-                    st.write(f"**Description:** {f.get('description', '')}")
+                    st.write(f"**Source Confidence:** {f.get('source_confidence', 'Unspecified')}")
+                    if f.get('summary'):
+                        st.write(f"**Summary:** {f['summary']}")
+                    if f.get('evidence_url'):
+                        st.write(f"**Evidence URL:** [{f['evidence_url']}]({f['evidence_url']})")
+                    if f.get('evidence_hash_sha256'):
+                        st.caption(f"**SHA-256:** `{f['evidence_hash_sha256']}`")
                     
                     col1, col2 = st.columns(2)
                     if col1.button("Edit Finding", key=f"edit_find_btn_{f['id']}"):
                         st.session_state.edit_finding_id = f['id']
                         st.rerun()
                     if col2.button("Delete Finding", key=f"del_find_{f['id']}"):
-                        db.delete_project_finding(f['id'])
+                        db.delete_case_finding(f['id'])
                         st.rerun()
     else:
-        st.write("No findings yet.")
+        st.info("No intelligence findings added to this case yet.")
 
-    st.divider()
     st.divider()
     
-    with st.expander("Import from Library"):
-        lib = db.get_vuln_library()
+    with st.expander("Import Vector from Risk Library"):
+        risk_lib = db.get_risk_library()
         
-        if lib and active_project:
-            lib = [v for v in lib if v.get('service_type') == active_project.get('project_type')]
-            
-        if not lib:
-            st.info(f"No vulnerabilities found in the library for {active_project.get('project_type', 'this project type')}.")
+        if not risk_lib:
+            st.info("No pre-populated risk vectors found in the library.")
         else:
-            with st.form("import_from_lib"):
-                lib_options = {f"[{v['severity']}] {v['title']}": v for v in lib}
-                selected_vuln_name = st.selectbox("Select Vulnerability", list(lib_options.keys()))
+            with st.form("import_from_risk_lib"):
+                lib_options = {f"[{v['default_risk_level']}] {v['title']} ({v.get('category', 'General')})": v for v in risk_lib}
+                selected_vector_name = st.selectbox("Select Threat Vector", list(lib_options.keys()))
                 
-                col_h, col_p = st.columns(2)
-                lib_host = col_h.text_input("Host")
-                if is_web_app:
-                    lib_path = col_p.text_input("Affected Path (e.g. /admin)")
-                else:
-                    lib_path = ""
-                
-                if st.form_submit_button("Import to Project") and selected_vuln_name:
-                    selected_vuln = lib_options[selected_vuln_name]
-                    db.add_project_finding(
-                        project_id,
-                        selected_vuln['title'],
-                        selected_vuln['severity'],
-                        selected_vuln['description'],
-                        selected_vuln['remediation'],
-                        selected_vuln['cvss'],
-                        lib_host,
-                        lib_path,
-                        selected_vuln.get('cvss_vector', ''),
-                        selected_vuln.get('refs', ''),
-                        sanitize_rich_html(selected_vuln.get('steps_to_reproduce', ''))
+                if st.form_submit_button("Import to Case") and selected_vector_name:
+                    selected_v = lib_options[selected_vector_name]
+                    db.add_case_finding(
+                        case_id=case_id,
+                        domain_category=selected_v.get('category', 'Custom Category'),
+                        title=selected_v['title'],
+                        risk_level=selected_v['default_risk_level'],
+                        source_confidence=selected_v.get('source_confidence', 'High Confidence'),
+                        summary=selected_v.get('description', ''),
+                        detailed_findings=sanitize_rich_html(selected_v.get('investigative_guidance', '')),
+                        evidence_url='',
+                        evidence_hash_sha256='',
+                        source_citation=selected_v.get('refs', '')
                     )
-                    st.success("Imported finding from library.")
+                    st.success(f"Imported '{selected_v['title']}' to case.")
                     st.rerun()
-
-    with st.expander("Import Scanner Output"):
-        import_type = st.radio("Select Tool", ["Nessus", "Burp Suite"], horizontal=True)
-        
-        if import_type == "Nessus":
-            uploaded_file = st.file_uploader("Upload Nessus File (.nessus)", type=['nessus', 'xml'])
-            parser_func = parse_nessus
-        else:
-            uploaded_file = st.file_uploader("Upload Burp XML File", type=['xml'])
-            parser_func = parse_burp
-        
-        if uploaded_file is not None:
-            if st.button("Parse & Import Findings"):
-                temp_path = f"data/temp_{uploaded_file.name}"
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                    
-                try:
-                    findings = parser_func(temp_path)
-                    st.success(f"Parsed {len(findings)} findings.")
-                    for f in findings:
-                        db.add_project_finding(
-                            project_id, 
-                            f['title'], 
-                            f['severity'], 
-                            f['description'], 
-                            f['remediation'], 
-                            f['cvss'], 
-                            f['host'],
-                            f.get('path', ''),
-                            '',
-                            '',
-                            ''
-                        )
-                    st.success("Successfully added all findings to project!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error parsing file: {e}")
-                finally:
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
 
     st.divider()
     if 'add_finding_key' not in st.session_state:
         st.session_state.add_finding_key = 0
 
-    st.subheader("Add Manual Finding")
+    st.subheader("Add Manual Intelligence Finding")
     with st.form(f"add_manual_finding_{st.session_state.add_finding_key}"):
-        mf_title = st.text_input("Title")
-        mf_sev = st.selectbox("Severity", ["Critical", "High", "Medium", "Low", "Info"])
-        col_h, col_p = st.columns(2)
-        mf_host = col_h.text_input("Host")
-        if is_web_app:
-            mf_path = col_p.text_input("Affected Path (e.g. /admin)")
-        else:
-            mf_path = ""
+        mf_title = st.text_input("Finding Title", placeholder="e.g., Unsanctified Corporate Entity Registered in Offshore Jurisdiction")
         
-        col_c, col_v = st.columns(2)
-        mf_cvss = col_c.number_input("CVSS", min_value=0.0, max_value=10.0, step=0.1)
-        mf_cvss_vector = col_v.text_input("CVSSv4 Vector String")
+        col_m1, col_m2, col_m3 = st.columns(3)
+        mf_category = col_m1.selectbox("Domain Category", DOMAIN_CATEGORIES)
+        mf_risk = col_m2.selectbox("Risk Level", RISK_LEVELS)
+        mf_conf = col_m3.selectbox("Source Confidence", CONFIDENCE_LEVELS)
         
-        mf_desc = st.text_area("Description")
-        st.markdown("**Steps to Reproduce**")
-        jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "placeholder": "Write your steps to reproduce here (you can paste images)...", "height": 400, "uploader": {"insertImageAsBase64URI": True}}
-        mf_steps = st_jodit(value="", config=jodit_config, key=f"mf_steps_add_{st.session_state.add_finding_key}")
-        mf_rem = st.text_area("Remediation")
-        mf_refs = st.text_area("References (one URL per line)")
+        mf_summary = st.text_area("Executive Summary", placeholder="Brief high-level summary of the intelligence item...")
+        
+        st.markdown("**Detailed Findings & Narrative**")
+        jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "placeholder": "Enter detailed analytical narrative, screenshots, or extracted raw intelligence here...", "height": 350, "uploader": {"insertImageAsBase64URI": True}}
+        mf_details = st_jodit(value="", config=jodit_config, key=f"mf_details_add_{st.session_state.add_finding_key}")
+        
+        st.markdown("**Digital Evidence & Chain of Custody**")
+        col_me1, col_me2 = st.columns(2)
+        mf_url = col_me1.text_input("Evidence URL / Snapshot Link")
+        mf_hash = col_me2.text_input("Evidence File SHA-256 Hash")
+        mf_citation = st.text_input("Source Citation / Platform Name", placeholder="e.g., UK Companies House / OpenCorporates API")
+        
         if st.form_submit_button("Add Finding") and mf_title:
-            processed_mf_steps = process_base64_images(sanitize_rich_html(mf_steps), active_project['client_id'], project_id)
-            db.add_project_finding(project_id, mf_title, mf_sev, mf_desc, mf_rem, mf_cvss, mf_host, mf_path, mf_cvss_vector, mf_refs, processed_mf_steps)
-            st.success("Added finding.")
+            processed_mf_details = process_base64_images(sanitize_rich_html(mf_details), active_case['client_id'], case_id)
+            db.add_case_finding(
+                case_id=case_id,
+                domain_category=mf_category,
+                title=mf_title,
+                risk_level=mf_risk,
+                source_confidence=mf_conf,
+                summary=mf_summary,
+                detailed_findings=processed_mf_details,
+                evidence_url=mf_url,
+                evidence_hash_sha256=mf_hash,
+                source_citation=mf_citation
+            )
+            st.success("Finding successfully added to case!")
             st.session_state.add_finding_key += 1
             st.rerun()
