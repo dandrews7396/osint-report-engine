@@ -1,10 +1,10 @@
 import sqlite3
 import os
+import time
 
-DB_PATH = 'data/kairos.db'
+DB_PATH = 'data/kairos_osint.db'
 
 def get_connection():
-    # Ensure the data directory exists
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -13,264 +13,238 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
-
-    # Create Users Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            mfa_secret TEXT,
-            mfa_enabled BOOLEAN DEFAULT 0
-        )
-    ''')
-
-    # Create Settings Table (Firm profile boilerplates)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    ''')
-
-    # Default settings
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('firm_name', 'Default Firm')")
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('executive_summary_template', 'This executive summary provides an overview of the engagement...')")
-
-    # Create Testers Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS testers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            title TEXT,
-            bio TEXT
-        )
-    ''')
-
-    # Create Clients Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT
-        )
-    ''')
-
-    # Create Projects Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            application_name TEXT,
-            client_id INTEGER NOT NULL,
-            start_date TEXT,
-            end_date TEXT,
-            report_date TEXT,
-            tester_name TEXT,
-            tester_description TEXT,
-            hosts TEXT,
-            summary_of_strengths TEXT,
-            summary_of_weaknesses TEXT,
-            cvss_mapping TEXT,
-            tools_used TEXT,
-            FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE CASCADE
-        )
-    ''')
-
-    # Create Vulnerability Library Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS vuln_library (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            service_type TEXT,
-            title TEXT NOT NULL,
-            severity TEXT NOT NULL,
-            description TEXT,
-            remediation TEXT,
-            cvss REAL,
-            cve TEXT,
-            cvss_vector TEXT,
-            refs TEXT,
-            steps_to_reproduce TEXT
-        )
-    ''')
-
-    # Create Project Findings Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS project_findings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            severity TEXT NOT NULL,
-            description TEXT,
-            remediation TEXT,
-            cvss REAL,
-            host TEXT,
-            path TEXT,
-            cvss_vector TEXT,
-            refs TEXT,
-            steps_to_reproduce TEXT,
-            FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
-        )
-    ''')
-
-    # Ensure 'title' column exists in 'testers' table (Migration)
-    cursor.execute("PRAGMA table_info(testers)")
-    tester_columns = [col['name'] for col in cursor.fetchall()]
-    if 'title' not in tester_columns:
-        cursor.execute("ALTER TABLE testers ADD COLUMN title TEXT")
-
-    # Migration: Add steps_to_reproduce if it doesn't exist
     try:
-        cursor.execute("ALTER TABLE project_findings ADD COLUMN steps_to_reproduce TEXT")
-    except sqlite3.OperationalError:
-        pass
+        # 1. Users Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                mfa_secret TEXT,
+                mfa_enabled BOOLEAN DEFAULT 0,
+                failed_login_attempts INTEGER DEFAULT 0,
+                lockout_until REAL DEFAULT 0
+            )
+        ''')
 
-    # Migration: Add new project columns
-    new_project_cols = ['tester_name', 'tester_description', 'hosts', 'summary_of_strengths', 'summary_of_weaknesses', 'cvss_mapping', 'tools_used', 'application_name', 'report_date']
-    for col in new_project_cols:
-        try:
-            cursor.execute(f"ALTER TABLE projects ADD COLUMN {col} TEXT")
-        except sqlite3.OperationalError:
-            pass
+        # 2. Settings Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
 
-    # Migration: Add steps_to_reproduce to vuln_library
-    try:
-        cursor.execute("ALTER TABLE vuln_library ADD COLUMN steps_to_reproduce TEXT")
-    except sqlite3.OperationalError:
-        pass
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('firm_name', 'Corporate Intelligence Advisory Group')")
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ico_registration_no', 'ZB123456')")
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('gdpr_lawful_basis', 'Article 6(1)(f) UK GDPR — Legitimate Interest for corporate risk mitigation and legal disputes.')")
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('executive_summary_template', 'This Enhanced Due Diligence report provides an objective risk assessment based on open-source intelligence...')")
 
-    # Migration: Add new finding columns
-    new_finding_cols = ['path', 'cvss_vector', 'refs']
-    for col in new_finding_cols:
-        try:
-            cursor.execute(f"ALTER TABLE project_findings ADD COLUMN {col} TEXT")
-        except sqlite3.OperationalError:
-            pass
+        # 3. Investigators Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS investigators (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                title TEXT,
+                credentials TEXT,
+                bio TEXT
+            )
+        ''')
 
-    # Migration: Add deleted_at columns for Soft Delete functionality
-    for table in ['clients', 'projects', 'project_findings']:
-        try:
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN deleted_at TEXT")
-        except sqlite3.OperationalError:
-            pass
-            
-    # Migration: Add attestation_bio to projects
-    try:
-        cursor.execute("ALTER TABLE projects ADD COLUMN attestation_bio TEXT")
-    except sqlite3.OperationalError:
-        pass
-            
-    # Migration: Add project_type to projects
-    try:
-        cursor.execute("ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT 'Web Application Penetration Test'")
-    except sqlite3.OperationalError:
-        pass
-        
-    # Migration: Add brute force protection to users
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
-        cursor.execute("ALTER TABLE users ADD COLUMN lockout_until REAL DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
+        # 4. Clients Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                client_type TEXT DEFAULT 'Law Firm',
+                contact_email TEXT,
+                description TEXT,
+                deleted_at TEXT
+            )
+        ''')
 
-    try:
-        cursor.execute("ALTER TABLE vuln_library ADD COLUMN service_type TEXT")
-        cursor.execute("UPDATE vuln_library SET service_type = 'Web Application Penetration Test' WHERE service_type IS NULL")
-    except sqlite3.OperationalError:
-        pass
+        # 5. Cases Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_ref TEXT NOT NULL UNIQUE,
+                case_name TEXT NOT NULL,
+                case_type TEXT DEFAULT 'Enhanced Due Diligence',
+                client_id INTEGER NOT NULL,
+                start_date TEXT,
+                end_date TEXT,
+                report_date TEXT,
+                lead_investigator TEXT,
+                investigator_description TEXT,
+                target_name TEXT,
+                target_type TEXT,
+                companies_house_num TEXT,
+                legitimate_interest_assessment TEXT,
+                overall_risk_rating TEXT DEFAULT 'Low Risk',
+                executive_assessment TEXT,
+                limitations_disclaimer TEXT,
+                tools_and_sources_used TEXT,
+                deleted_at TEXT,
+                FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE CASCADE
+            )
+        ''')
 
-    try:
-        cursor.execute("ALTER TABLE vuln_library ADD COLUMN cvss_vector TEXT")
-    except sqlite3.OperationalError:
-        pass
+        # 6. OSINT Risk Library Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS risk_library (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT,
+                title TEXT NOT NULL,
+                default_risk_level TEXT NOT NULL,
+                description TEXT,
+                investigative_guidance TEXT,
+                source_confidence TEXT DEFAULT 'High Confidence',
+                refs TEXT
+            )
+        ''')
 
-    try:
-        cursor.execute("ALTER TABLE vuln_library ADD COLUMN refs TEXT")
-    except sqlite3.OperationalError:
-        pass
+        # 7. Case Findings Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS case_findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id INTEGER NOT NULL,
+                domain_category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                risk_level TEXT NOT NULL,
+                source_confidence TEXT DEFAULT 'High Confidence',
+                summary TEXT,
+                detailed_findings TEXT,
+                evidence_url TEXT,
+                evidence_hash_sha256 TEXT,
+                source_citation TEXT,
+                deleted_at TEXT,
+                FOREIGN KEY (case_id) REFERENCES cases (id) ON DELETE CASCADE
+            )
+        ''')
 
-    # Create Login Attempts Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS login_attempts (
-            username TEXT PRIMARY KEY,
-            failed_attempts INTEGER DEFAULT 0,
-            last_attempt REAL
-        )
-    ''')
+        # 8. Login Attempts Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                username TEXT PRIMARY KEY,
+                failed_attempts INTEGER DEFAULT 0,
+                last_attempt REAL
+            )
+        ''')
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Database initialization failed: {e}")
+    finally:
+        conn.close()
 
-# User Management Functions
+# User Management Functions with Defensive Error Handling
 def get_user_count():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM users")
-    count = cursor.fetchone()[0]
-    conn.close()
-    return count
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        return cursor.fetchone()[0]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_user_count: {e}")
+        return 0
+    finally:
+        conn.close()
 
 def add_user(username, password_hash):
     conn = get_connection()
-    cursor = conn.cursor()
     try:
+        cursor = conn.cursor()
         cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, password_hash))
         conn.commit()
     except sqlite3.IntegrityError:
+        conn.rollback()
         raise ValueError("Username already exists")
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Database error while adding user: {e}")
     finally:
         conn.close()
 
 def get_user(username):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row) if row else None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_user: {e}")
+        return None
+    finally:
+        conn.close()
 
 def update_user_mfa(username, mfa_secret, mfa_enabled):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET mfa_secret = ?, mfa_enabled = ? WHERE username = ?", (mfa_secret, mfa_enabled, username))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET mfa_secret = ?, mfa_enabled = ? WHERE username = ?", (mfa_secret, mfa_enabled, username))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_user_mfa: {e}")
+    finally:
+        conn.close()
 
 def update_user_password(username, new_password_hash):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (new_password_hash, username))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (new_password_hash, username))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_user_password: {e}")
+    finally:
+        conn.close()
 
 def record_failed_login(username):
-    import time
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO login_attempts (username, failed_attempts, last_attempt) 
-        VALUES (?, 1, ?) 
-        ON CONFLICT(username) DO UPDATE SET 
-            failed_attempts = failed_attempts + 1, 
-            last_attempt = ?
-    ''', (username, time.time(), time.time()))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO login_attempts (username, failed_attempts, last_attempt) 
+            VALUES (?, 1, ?) 
+            ON CONFLICT(username) DO UPDATE SET 
+                failed_attempts = failed_attempts + 1, 
+                last_attempt = ?
+        ''', (username, time.time(), time.time()))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] record_failed_login: {e}")
+    finally:
+        conn.close()
 
 def reset_failed_logins(username):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] reset_failed_logins: {e}")
+    finally:
+        conn.close()
 
 def get_failed_logins(username):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT failed_attempts FROM login_attempts WHERE username = ?", (username,))
-    row = cursor.fetchone()
-    conn.close()
-    return row['failed_attempts'] if row else 0
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT failed_attempts FROM login_attempts WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        return row['failed_attempts'] if row else 0
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_failed_logins: {e}")
+        return 0
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     init_db()
