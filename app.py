@@ -1,5 +1,6 @@
 import streamlit as st
-st.set_page_config(page_title="Kairos Report Engine", page_icon="assets/KairosSecLogo.png", layout="wide")
+
+st.set_page_config(page_title="OSINT Intelligence Engine", page_icon="assets/DIILogo.png", layout="wide")
 
 hide_streamlit_style = """
 <style>
@@ -14,10 +15,11 @@ from database.db import init_db, get_user_count
 from utils.auth import get_cookie_controller
 from utils.helpers import get_image_base64
 
+# Updated OSINT View Imports
 from views.dashboard import show_dashboard
-from views.manage_projects import show_manage_projects
+from views.manage_cases import show_manage_cases
 from views.manage_findings import show_manage_findings
-from views.vuln_library import show_vuln_library
+from views.risk_library import show_risk_library
 from views.generate_report import show_generate_report
 from views.templates import show_templates
 from views.profile import show_profile
@@ -54,11 +56,24 @@ def main():
         return
 
     logo_b64 = get_image_base64("assets/DIILogo.png")
-    st.sidebar.markdown(f'<a href="https://kairos-sec.com" target="_blank"><img src="data:image/png;base64,{logo_b64}" alt="SEROCU DII" width="75%" style="margin-bottom: 20px;"></a>', unsafe_allow_html=True)
-    st.sidebar.title("DII Report Engine")
-    menu = ["Dashboard", "Manage Projects", "Add Findings", "Finding Library", "Generate Report", "Templates", "Profile", "Admin: Users", "Logout"]
+    st.sidebar.markdown(f'<a href="https://kairos-sec.com" target="_blank"><img src="data:image/png;base64,{logo_b64}" alt="DII" width="75%" style="margin-bottom: 20px;"></a>', unsafe_allow_html=True)
+    st.sidebar.title("OSINT Intelligence Engine")
     
-    if "nav" not in st.session_state:
+    # Navigation menu reflecting OSINT domain views
+    menu = [
+        "Dashboard", 
+        "Manage Cases", 
+        "Case Findings", 
+        "Risk Library", 
+        "Generate Report", 
+        "Templates", 
+        "Profile", 
+        "Admin: Users", 
+        "Logout"
+    ]
+    
+    # Fallback sanity check for active nav state
+    if "nav" not in st.session_state or st.session_state.nav not in menu:
         st.session_state.nav = "Dashboard"
         
     choice = st.sidebar.radio("Navigation", menu, index=menu.index(st.session_state.nav))
@@ -70,14 +85,15 @@ def main():
             st.session_state.nav = choice
             st.rerun()
 
+    # View Routing
     if st.session_state.nav == "Dashboard":
         show_dashboard()
-    elif st.session_state.nav == "Manage Projects":
-        show_manage_projects()
-    elif st.session_state.nav == "Add Findings":
+    elif st.session_state.nav == "Manage Cases":
+        show_manage_cases()
+    elif st.session_state.nav == "Case Findings":
         show_manage_findings()
-    elif st.session_state.nav == "Finding Library":
-        show_vuln_library()
+    elif st.session_state.nav == "Risk Library":
+        show_risk_library()
     elif st.session_state.nav == "Generate Report":
         show_generate_report()
     elif st.session_state.nav == "Templates":
