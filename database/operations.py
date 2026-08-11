@@ -1,307 +1,547 @@
+import sqlite3
 from database.db import get_connection
 
 # --- System ---
 def cleanup_deleted_items():
     conn = get_connection()
-    cursor = conn.cursor()
-    # Delete items where deleted_at is older than 30 days
-    cursor.execute("DELETE FROM project_findings WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
-    cursor.execute("DELETE FROM projects WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
-    cursor.execute("DELETE FROM clients WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM case_findings WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
+        cursor.execute("DELETE FROM cases WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
+        cursor.execute("DELETE FROM clients WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] cleanup_deleted_items: {e}")
+    finally:
+        conn.close()
 
 # --- Settings ---
 def get_settings() -> dict:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT key, value FROM settings")
-    settings = {row['key']: row['value'] for row in cursor.fetchall()}
-    conn.close()
-    return settings
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM settings")
+        return {row['key']: row['value'] for row in cursor.fetchall()}
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_settings: {e}")
+        return {}
+    finally:
+        conn.close()
 
 def update_setting(key: str, value: str):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_setting: {e}")
+    finally:
+        conn.close()
 
 # --- Clients ---
 def get_clients() -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM clients WHERE deleted_at IS NULL")
-    clients = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return clients
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM clients WHERE deleted_at IS NULL")
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_clients: {e}")
+        return []
+    finally:
+        conn.close()
 
 def get_deleted_clients() -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM clients WHERE deleted_at IS NOT NULL")
-    clients = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return clients
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM clients WHERE deleted_at IS NOT NULL")
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_deleted_clients: {e}")
+        return []
+    finally:
+        conn.close()
 
-def add_client(name: str, description: str = ''):
+def add_client(name: str, client_type: str = 'Law Firm', contact_email: str = '', description: str = ''):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO clients (name, description) VALUES (?, ?)", (name, description))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO clients (name, client_type, contact_email, description) 
+            VALUES (?, ?, ?, ?)
+        """, (name, client_type, contact_email, description))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] add_client: {e}")
+    finally:
+        conn.close()
 
 def delete_client(client_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE clients SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (client_id,))
-    # Soft delete all associated projects
-    cursor.execute("UPDATE projects SET deleted_at = CURRENT_TIMESTAMP WHERE client_id = ? AND deleted_at IS NULL", (client_id,))
-    # Soft delete all findings for those projects
-    cursor.execute("""
-        UPDATE project_findings SET deleted_at = CURRENT_TIMESTAMP 
-        WHERE project_id IN (SELECT id FROM projects WHERE client_id = ?) 
-        AND deleted_at IS NULL
-    """, (client_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE clients SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (client_id,))
+        cursor.execute("UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE client_id = ? AND deleted_at IS NULL", (client_id,))
+        cursor.execute("""
+            UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP 
+            WHERE case_id IN (SELECT id FROM cases WHERE client_id = ?) 
+            AND deleted_at IS NULL
+        """, (client_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] delete_client: {e}")
+    finally:
+        conn.close()
 
 def restore_client(client_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE clients SET deleted_at = NULL WHERE id = ?", (client_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE clients SET deleted_at = NULL WHERE id = ?", (client_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] restore_client: {e}")
+    finally:
+        conn.close()
 
 def hard_delete_client(client_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] hard_delete_client: {e}")
+    finally:
+        conn.close()
 
-# --- Projects ---
-def get_projects() -> list[dict]:
+# --- Cases (Formerly Projects) ---
+def get_cases() -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.*, c.name as client_name 
-        FROM projects p 
-        JOIN clients c ON p.client_id = c.id
-        WHERE p.deleted_at IS NULL AND c.deleted_at IS NULL
-    """)
-    projects = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return projects
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT c.*, cl.name as client_name 
+            FROM cases c 
+            JOIN clients cl ON c.client_id = cl.id
+            WHERE c.deleted_at IS NULL AND cl.deleted_at IS NULL
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_cases: {e}")
+        return []
+    finally:
+        conn.close()
 
-def get_deleted_projects() -> list[dict]:
+def get_deleted_cases() -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.*, c.name as client_name 
-        FROM projects p 
-        JOIN clients c ON p.client_id = c.id
-        WHERE p.deleted_at IS NOT NULL
-    """)
-    projects = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return projects
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT c.*, cl.name as client_name 
+            FROM cases c 
+            JOIN clients cl ON c.client_id = cl.id
+            WHERE c.deleted_at IS NOT NULL
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_deleted_cases: {e}")
+        return []
+    finally:
+        conn.close()
 
-def add_project(name: str, application_name: str, client_id: int, project_type: str = 'Web Application Penetration Test', start_date: str = '', end_date: str = '', report_date: str = '', tester_name: str = '', tester_description: str = '', hosts: str = '', summary_of_strengths: str = '', summary_of_weaknesses: str = '', cvss_mapping: str = '', tools_used: str = ''):
+def add_case(
+    case_ref: str,
+    case_name: str,
+    client_id: int,
+    case_type: str = 'Enhanced Due Diligence',
+    start_date: str = '',
+    end_date: str = '',
+    report_date: str = '',
+    lead_investigator: str = '',
+    investigator_description: str = '',
+    target_name: str = '',
+    target_type: str = 'Corporate',
+    companies_house_num: str = '',
+    legitimate_interest_assessment: str = '',
+    overall_risk_rating: str = 'Low Risk',
+    executive_assessment: str = '',
+    limitations_disclaimer: str = '',
+    tools_and_sources_used: str = ''
+) -> int:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO projects (name, application_name, client_id, project_type, start_date, end_date, report_date, tester_name, tester_description, hosts, summary_of_strengths, summary_of_weaknesses, cvss_mapping, tools_used) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (name, application_name, client_id, project_type, start_date, end_date, report_date, tester_name, tester_description, hosts, summary_of_strengths, summary_of_weaknesses, cvss_mapping, tools_used))
-    new_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return new_id
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO cases (
+                case_ref, case_name, client_id, case_type, start_date, end_date, report_date,
+                lead_investigator, investigator_description, target_name, target_type,
+                companies_house_num, legitimate_interest_assessment, overall_risk_rating,
+                executive_assessment, limitations_disclaimer, tools_and_sources_used
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            case_ref, case_name, client_id, case_type, start_date, end_date, report_date,
+            lead_investigator, investigator_description, target_name, target_type,
+            companies_house_num, legitimate_interest_assessment, overall_risk_rating,
+            executive_assessment, limitations_disclaimer, tools_and_sources_used
+        ))
+        new_id = cursor.lastrowid
+        conn.commit()
+        return new_id
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] add_case: {e}")
+        raise e
+    finally:
+        conn.close()
 
-def update_project(project_id: int, name: str, application_name: str, project_type: str, start_date: str, end_date: str, report_date: str, tester_name: str, tester_description: str, hosts: str, summary_of_strengths: str, summary_of_weaknesses: str, cvss_mapping: str, tools_used: str):
+def update_case(
+    case_id: int,
+    case_ref: str,
+    case_name: str,
+    case_type: str,
+    start_date: str,
+    end_date: str,
+    report_date: str,
+    lead_investigator: str,
+    investigator_description: str,
+    target_name: str,
+    target_type: str,
+    companies_house_num: str,
+    legitimate_interest_assessment: str,
+    overall_risk_rating: str,
+    executive_assessment: str,
+    limitations_disclaimer: str,
+    tools_and_sources_used: str
+):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE projects 
-        SET name = ?, application_name = ?, project_type = ?, start_date = ?, end_date = ?, report_date = ?, tester_name = ?, tester_description = ?, hosts = ?, summary_of_strengths = ?, summary_of_weaknesses = ?, cvss_mapping = ?, tools_used = ?
-        WHERE id = ?
-    """, (name, application_name, project_type, start_date, end_date, report_date, tester_name, tester_description, hosts, summary_of_strengths, summary_of_weaknesses, cvss_mapping, tools_used, project_id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE cases 
+            SET case_ref = ?, case_name = ?, case_type = ?, start_date = ?, end_date = ?, report_date = ?, 
+                lead_investigator = ?, investigator_description = ?, target_name = ?, target_type = ?, 
+                companies_house_num = ?, legitimate_interest_assessment = ?, overall_risk_rating = ?, 
+                executive_assessment = ?, limitations_disclaimer = ?, tools_and_sources_used = ?
+            WHERE id = ?
+        """, (
+            case_ref, case_name, case_type, start_date, end_date, report_date,
+            lead_investigator, investigator_description, target_name, target_type,
+            companies_house_num, legitimate_interest_assessment, overall_risk_rating,
+            executive_assessment, limitations_disclaimer, tools_and_sources_used, case_id
+        ))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_case: {e}")
+    finally:
+        conn.close()
 
-def update_project_attestation_bio(project_id: int, attestation_bio: str):
+def delete_case(case_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE projects SET attestation_bio = ? WHERE id = ?", (attestation_bio, project_id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (case_id,))
+        cursor.execute("UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] delete_case: {e}")
+    finally:
+        conn.close()
 
-def delete_project(project_id: int):
+def restore_case(case_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE projects SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (project_id,))
-    # Soft delete all findings for this project
-    cursor.execute("UPDATE project_findings SET deleted_at = CURRENT_TIMESTAMP WHERE project_id = ? AND deleted_at IS NULL", (project_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE cases SET deleted_at = NULL WHERE id = ?", (case_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] restore_case: {e}")
+    finally:
+        conn.close()
 
-def restore_project(project_id: int):
+def hard_delete_case(case_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE projects SET deleted_at = NULL WHERE id = ?", (project_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cases WHERE id = ?", (case_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] hard_delete_case: {e}")
+    finally:
+        conn.close()
 
-def hard_delete_project(project_id: int):
+# --- Risk Library (Formerly Vulnerability Library) ---
+def get_risk_library() -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM risk_library")
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_risk_library: {e}")
+        return []
+    finally:
+        conn.close()
 
-# --- Vulnerability Library ---
-def get_vuln_library() -> list[dict]:
+def add_to_risk_library(
+    category: str,
+    title: str,
+    default_risk_level: str,
+    description: str = '',
+    investigative_guidance: str = '',
+    source_confidence: str = 'High Confidence',
+    refs: str = ''
+):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM vuln_library")
-    vulns = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return vulns
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO risk_library (category, title, default_risk_level, description, investigative_guidance, source_confidence, refs)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (category, title, default_risk_level, description, investigative_guidance, source_confidence, refs))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] add_to_risk_library: {e}")
+    finally:
+        conn.close()
 
-def add_to_vuln_library(title: str, severity: str, description: str = '', remediation: str = '', cvss: float = 0.0, cve: str = '', steps_to_reproduce: str = '', service_type: str = 'Web Application Penetration Test', cvss_vector: str = '', refs: str = ''):
+def delete_from_risk_library(risk_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO vuln_library (service_type, title, severity, description, remediation, cvss, cve, cvss_vector, refs, steps_to_reproduce)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (service_type, title, severity, description, remediation, cvss, cve, cvss_vector, refs, steps_to_reproduce))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM risk_library WHERE id = ?", (risk_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] delete_from_risk_library: {e}")
+    finally:
+        conn.close()
 
-def delete_from_vuln_library(vuln_id: int):
+def update_in_risk_library(
+    risk_id: int,
+    category: str,
+    title: str,
+    default_risk_level: str,
+    description: str,
+    investigative_guidance: str,
+    source_confidence: str,
+    refs: str
+):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM vuln_library WHERE id = ?", (vuln_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE risk_library 
+            SET category = ?, title = ?, default_risk_level = ?, description = ?, investigative_guidance = ?, source_confidence = ?, refs = ?
+            WHERE id = ?
+        """, (category, title, default_risk_level, description, investigative_guidance, source_confidence, refs, risk_id))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_in_risk_library: {e}")
+    finally:
+        conn.close()
 
-def update_in_vuln_library(vuln_id: int, title: str, severity: str, description: str, remediation: str, cvss: float, cve: str, steps_to_reproduce: str, service_type: str, cvss_vector: str, refs: str):
+# --- Case Findings (Formerly Project Findings) ---
+def get_case_findings(case_id: int) -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE vuln_library 
-        SET service_type = ?, title = ?, severity = ?, description = ?, remediation = ?, cvss = ?, cve = ?, steps_to_reproduce = ?, cvss_vector = ?, refs = ?
-        WHERE id = ?
-    """, (service_type, title, severity, description, remediation, cvss, cve, steps_to_reproduce, cvss_vector, refs, vuln_id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM case_findings WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_case_findings: {e}")
+        return []
+    finally:
+        conn.close()
 
-# --- Project Findings ---
-def get_project_findings(project_id: int) -> list[dict]:
+def get_deleted_case_findings() -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM project_findings WHERE project_id = ? AND deleted_at IS NULL", (project_id,))
-    findings = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return findings
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT f.*, c.case_name as case_name 
+            FROM case_findings f 
+            JOIN cases c ON f.case_id = c.id 
+            WHERE f.deleted_at IS NOT NULL
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_deleted_case_findings: {e}")
+        return []
+    finally:
+        conn.close()
 
-def get_deleted_project_findings() -> list[dict]:
+def add_case_finding(
+    case_id: int,
+    domain_category: str,
+    title: str,
+    risk_level: str,
+    source_confidence: str = 'High Confidence',
+    summary: str = '',
+    detailed_findings: str = '',
+    evidence_url: str = '',
+    evidence_hash_sha256: str = '',
+    source_citation: str = ''
+):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT f.*, p.name as project_name 
-        FROM project_findings f 
-        JOIN projects p ON f.project_id = p.id 
-        WHERE f.deleted_at IS NOT NULL
-    """)
-    findings = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return findings
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO case_findings (
+                case_id, domain_category, title, risk_level, source_confidence, 
+                summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (case_id, domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] add_case_finding: {e}")
+    finally:
+        conn.close()
 
-def add_project_finding(project_id: int, title: str, severity: str, description: str, remediation: str, cvss: float, host: str, path: str = '', cvss_vector: str = '', refs: str = '', steps_to_reproduce: str = ''):
+def update_case_finding(
+    finding_id: int,
+    domain_category: str,
+    title: str,
+    risk_level: str,
+    source_confidence: str,
+    summary: str,
+    detailed_findings: str,
+    evidence_url: str,
+    evidence_hash_sha256: str,
+    source_citation: str
+):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO project_findings (project_id, title, severity, description, remediation, cvss, host, path, cvss_vector, refs, steps_to_reproduce)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (project_id, title, severity, description, remediation, cvss, host, path, cvss_vector, refs, steps_to_reproduce))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE case_findings 
+            SET domain_category = ?, title = ?, risk_level = ?, source_confidence = ?, 
+                summary = ?, detailed_findings = ?, evidence_url = ?, evidence_hash_sha256 = ?, source_citation = ?
+            WHERE id = ?
+        """, (domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation, finding_id))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_case_finding: {e}")
+    finally:
+        conn.close()
 
-def update_project_finding(finding_id: int, title: str, severity: str, description: str, remediation: str, cvss: float, host: str, path: str, cvss_vector: str, refs: str, steps_to_reproduce: str):
+def delete_case_finding(finding_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE project_findings 
-        SET title = ?, severity = ?, description = ?, remediation = ?, cvss = ?, host = ?, path = ?, cvss_vector = ?, refs = ?, steps_to_reproduce = ?
-        WHERE id = ?
-    """, (title, severity, description, remediation, cvss, host, path, cvss_vector, refs, steps_to_reproduce, finding_id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (finding_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] delete_case_finding: {e}")
+    finally:
+        conn.close()
 
-def delete_project_finding(finding_id: int):
+def restore_case_finding(finding_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE project_findings SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (finding_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE case_findings SET deleted_at = NULL WHERE id = ?", (finding_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] restore_case_finding: {e}")
+    finally:
+        conn.close()
 
-def restore_project_finding(finding_id: int):
+def hard_delete_case_finding(finding_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE project_findings SET deleted_at = NULL WHERE id = ?", (finding_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM case_findings WHERE id = ?", (finding_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] hard_delete_case_finding: {e}")
+    finally:
+        conn.close()
 
-def hard_delete_project_finding(finding_id: int):
+# --- Investigators (Formerly Testers) ---
+def get_investigators() -> list[dict]:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM project_findings WHERE id = ?", (finding_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM investigators")
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_investigators: {e}")
+        return []
+    finally:
+        conn.close()
 
-# --- Testers ---
-def get_testers():
+def add_investigator(name: str, title: str, credentials: str, bio: str):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM testers")
-    testers = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return testers
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO investigators (name, title, credentials, bio) VALUES (?, ?, ?, ?)", (name, title, credentials, bio))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] add_investigator: {e}")
+    finally:
+        conn.close()
 
-def add_tester(name, title, bio):
+def delete_investigator(investigator_id: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO testers (name, title, bio) VALUES (?, ?, ?)", (name, title, bio))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM investigators WHERE id = ?", (investigator_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] delete_investigator: {e}")
+    finally:
+        conn.close()
 
-def delete_tester(tester_id):
+def update_investigator(investigator_id: int, name: str, title: str, credentials: str, bio: str):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM testers WHERE id = ?", (tester_id,))
-    conn.commit()
-    conn.close()
-
-def update_tester(tester_id, name, title, bio):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE testers SET name = ?, title = ?, bio = ? WHERE id = ?", (name, title, bio, tester_id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE investigators SET name = ?, title = ?, credentials = ?, bio = ? WHERE id = ?", (name, title, credentials, bio, investigator_id))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_investigator: {e}")
+    finally:
+        conn.close()
 
 def get_client_with_most_recent_finding():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.client_id
-        FROM project_findings f
-        JOIN projects p ON f.project_id = p.id
-        WHERE f.deleted_at IS NULL AND p.deleted_at IS NULL
-        ORDER BY f.id DESC
-        LIMIT 1
-    """)
-    row = cursor.fetchone()
-    conn.close()
-    return row['client_id'] if row else None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT c.client_id
+            FROM case_findings f
+            JOIN cases c ON f.case_id = c.id
+            WHERE f.deleted_at IS NULL AND c.deleted_at IS NULL
+            ORDER BY f.id DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        return row['client_id'] if row else None
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_client_with_most_recent_finding: {e}")
+        return None
+    finally:
+        conn.close()
