@@ -8,10 +8,10 @@ def restore_files_dialog():
     st.write("Items deleted within the last 30 days can be restored here.")
     
     del_clients = db.get_deleted_clients()
-    del_projects = db.get_deleted_projects()
-    del_findings = db.get_deleted_project_findings()
+    del_cases = db.get_deleted_cases()
+    del_findings = db.get_deleted_case_findings()
     
-    if not del_clients and not del_projects and not del_findings:
+    if not del_clients and not del_cases and not del_findings:
         st.info("The recycle bin is empty.")
         return
         
@@ -27,42 +27,42 @@ def restore_files_dialog():
                 db.hard_delete_client(c['id'])
                 st.rerun()
                 
-    if del_projects:
-        st.markdown("### Deleted Projects")
-        for p in del_projects:
+    if del_cases:
+        st.markdown("### Deleted Cases")
+        for c in del_cases:
             col1, col2, col3 = st.columns([2, 1, 1])
-            col1.write(f"{p['name']} ({p.get('client_name', 'Unknown')})")
-            if col2.button("Restore", key=f"rp_{p['id']}"):
-                db.restore_project(p['id'])
+            col1.write(f"{c['case_name']} ({c.get('client_name', 'Unknown')})")
+            if col2.button("Restore", key=f"rp_{c['id']}"):
+                db.restore_case(c['id'])
                 st.rerun()
-            if col3.button("Permanently Delete", key=f"hdp_{p['id']}", type="primary"):
-                db.hard_delete_project(p['id'])
+            if col3.button("Permanently Delete", key=f"hdp_{c['id']}", type="primary"):
+                db.hard_delete_case(c['id'])
                 st.rerun()
                 
     if del_findings:
-        st.markdown("### Deleted Findings")
+        st.markdown("### Deleted Intelligence Findings")
         for f in del_findings:
             col1, col2, col3 = st.columns([2, 1, 1])
-            col1.write(f"{f['title']} ({f.get('project_name', 'Unknown')})")
+            col1.write(f"{f['title']} ({f.get('case_name', 'Unknown')})")
             if col2.button("Restore", key=f"rf_{f['id']}"):
-                db.restore_project_finding(f['id'])
+                db.restore_case_finding(f['id'])
                 st.rerun()
             if col3.button("Permanently Delete", key=f"hdf_{f['id']}", type="primary"):
-                db.hard_delete_project_finding(f['id'])
+                db.hard_delete_case_finding(f['id'])
                 st.rerun()
 
 def show_dashboard():
-    st.title("Kairos Report Engine")
-    st.write("Welcome to the Kairos Report Engine. Use this dashboard as your central hub to configure firm-wide settings, manage your client roster, and quickly jump into specific client projects.")
+    st.title("OSINT Intelligence Engine")
+    st.write("Welcome to the OSINT Intelligence Engine. Use this dashboard as your central hub to manage intelligence cases, client rosters, firm configuration, and investigative personnel.")
     
     clients = db.get_clients()
-    projects = db.get_projects()
-    vulns = db.get_vuln_library()
+    cases = db.get_cases()
+    risks = db.get_risk_library()
     
     col1, col2, col3 = st.columns(3)
     col1.metric("Active Clients", len(clients))
-    col2.metric("Total Projects", len(projects))
-    col3.metric("Vulns in Library", len(vulns))
+    col2.metric("Total Cases", len(cases))
+    col3.metric("Risk Templates", len(risks))
     
     st.divider()
     
@@ -70,10 +70,13 @@ def show_dashboard():
     
     with st.expander("Add New Client"):
         with st.form("dash_add_client"):
-            c_name = st.text_input("Client Name")
-            c_desc = st.text_area("Description")
+            c_f1, c_f2 = st.columns(2)
+            c_name = c_f1.text_input("Client Name")
+            c_type = c_f2.selectbox("Client Type", ["Law Firm", "Corporate Security", "Financial Institution", "Private Client", "Government"])
+            c_email = st.text_input("Contact Email")
+            c_desc = st.text_area("Description / Notes")
             if st.form_submit_button("Add Client") and c_name:
-                db.add_client(c_name, c_desc)
+                db.add_client(c_name, c_type, c_email, c_desc)
                 st.success(f"Added client: {c_name}")
                 st.rerun()
 
@@ -99,24 +102,24 @@ def show_dashboard():
         client_id = client_options[selected_client_name]
         st.session_state.active_client_id = client_id
         
-        client_projects = [p for p in projects if p['client_id'] == client_id]
+        client_cases = [c for c in cases if c['client_id'] == client_id]
         
-        if client_projects:
-            st.markdown(f"**Projects for {selected_client_name}**")
-            for cp in client_projects:
+        if client_cases:
+            st.markdown(f"**Cases for {selected_client_name}**")
+            for cc in client_cases:
                 with st.container():
                     col_pn, col_pb1, col_pb2 = st.columns([2, 1, 1])
-                    col_pn.write(f"- {cp['name']} ({cp.get('project_type', 'Unknown Type')})")
-                    if col_pb1.button("Edit Project", key=f"dash_go_proj_{cp['id']}"):
-                        st.session_state.nav = "Manage Projects"
-                        st.session_state.edit_project_id = cp['id']
+                    col_pn.write(f"- **[{cc.get('case_ref', 'NO-REF')}]** {cc['case_name']} *({cc.get('case_type', 'Unknown Type')})*")
+                    if col_pb1.button("Edit Case", key=f"dash_go_case_{cc['id']}"):
+                        st.session_state.nav = "Manage Cases"
+                        st.session_state.edit_case_id = cc['id']
                         st.rerun()
-                    if col_pb2.button("Add Findings", key=f"dash_add_find_{cp['id']}"):
-                        st.session_state.nav = "Add Findings"
-                        st.session_state.manage_findings_project_id = cp['id']
+                    if col_pb2.button("Add Findings", key=f"dash_add_find_{cc['id']}"):
+                        st.session_state.nav = "Case Findings"
+                        st.session_state.manage_findings_case_id = cc['id']
                         st.rerun()
         else:
-            st.write(f"*No projects assigned to {selected_client_name} yet.*")
+            st.write(f"*No cases assigned to {selected_client_name} yet.*")
 
     st.divider()
     
@@ -124,7 +127,7 @@ def show_dashboard():
     st.subheader("Firm Settings")
     with st.form("dash_firm_settings"):
         c_f1, c_f2 = st.columns(2)
-        firm_name = c_f1.text_input("Firm Name", value=settings.get('firm_name', 'Default Firm'))
+        firm_name = c_f1.text_input("Firm Name", value=settings.get('firm_name', 'Default Intelligence Firm'))
         firm_website = c_f2.text_input("Firm Website", value=settings.get('firm_website', ''))
         if st.form_submit_button("Save Firm Settings"):
             db.update_setting('firm_name', firm_name)
@@ -132,40 +135,42 @@ def show_dashboard():
             st.success("Firm Settings updated!")
             st.rerun()
 
-    st.subheader("Testing Team")
-    testers = db.get_testers()
-    if testers:
-        for t in testers:
-            with st.expander(f"**{t['name']}**"):
-                with st.form(f"edit_tester_{t['id']}"):
+    st.subheader("Investigative Team")
+    investigators = db.get_investigators()
+    if investigators:
+        for inv in investigators:
+            with st.expander(f"**{inv['name']}** ({inv.get('credentials', 'No Credentials')})"):
+                with st.form(f"edit_inv_{inv['id']}"):
                     col_t1, col_t2 = st.columns(2)
-                    e_t_name = col_t1.text_input("Name", value=t['name'])
-                    e_t_title = col_t2.text_input("Title", value=t.get('title', ''))
-                    e_t_bio = st.text_area("Bio/Qualifications", value=t['bio'])
+                    e_inv_name = col_t1.text_input("Name", value=inv['name'])
+                    e_inv_title = col_t2.text_input("Title", value=inv.get('title', ''))
+                    e_inv_creds = st.text_input("Credentials / Certifications", value=inv.get('credentials', ''))
+                    e_inv_bio = st.text_area("Bio / Professional Background", value=inv['bio'])
                     if st.form_submit_button("Save Changes"):
-                        db.update_tester(t['id'], e_t_name, e_t_title, e_t_bio)
-                        st.success("Tester updated.")
+                        db.update_investigator(inv['id'], e_inv_name, e_inv_title, e_inv_creds, e_inv_bio)
+                        st.success("Investigator updated.")
                         st.rerun()
-                if st.button("Delete Tester", key=f"del_tester_{t['id']}"):
-                    db.delete_tester(t['id'])
+                if st.button("Delete Investigator", key=f"del_inv_{inv['id']}"):
+                    db.delete_investigator(inv['id'])
                     st.rerun()
     else:
-        st.write("No testers added yet.")
+        st.write("No investigators added yet.")
         
-    with st.expander("Add New Tester"):
-        with st.form("add_tester"):
+    with st.expander("Add New Investigator"):
+        with st.form("add_investigator"):
             col_t1, col_t2 = st.columns(2)
-            t_name = col_t1.text_input("Name")
-            t_title = col_t2.text_input("Title")
-            t_bio = st.text_area("Bio/Qualifications")
-            if st.form_submit_button("Add Tester") and t_name:
-                db.add_tester(t_name, t_title, t_bio)
-                st.success("Added tester.")
+            inv_name = col_t1.text_input("Name")
+            inv_title = col_t2.text_input("Title")
+            inv_creds = st.text_input("Credentials / Certifications", placeholder="e.g., CIFI, OSINT-S, CII")
+            inv_bio = st.text_area("Bio / Professional Background")
+            if st.form_submit_button("Add Investigator") and inv_name:
+                db.add_investigator(inv_name, inv_title, inv_creds, inv_bio)
+                st.success("Added investigator.")
                 st.rerun()
 
     st.divider()
     st.subheader("Data Management")
-    st.write("Export your entire local database and project assets to a portable ZIP file, or recover accidentally deleted items.")
+    st.write("Export your entire local database and investigation assets to a portable ZIP archive, or recover deleted intelligence records.")
     
     col_dm1, col_dm2 = st.columns(2)
     with col_dm1:
