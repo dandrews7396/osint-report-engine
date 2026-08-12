@@ -13,9 +13,9 @@
   </tr>
   <tr>
     <td class="label">Date:</td>
-    <td class="value">{% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{{ case.report_date_formatted }}</td>
     <td class="label">Primary Subject:</td>
-    <td class="value"><strong>{% if case.primary_target_name %}{{ case.primary_target_name }}{% else %}N/A{% endif %}</strong></td>
+    <td class="value"><strong>{{ case.target_scope }}</strong></td>
   </tr>
   <tr>
     <td class="label">Client Name:</td>
@@ -25,9 +25,9 @@
   </tr>
   <tr>
     <td class="label">Lead Investigator:</td>
-    <td class="value">{% if case.investigator_name %}{{ case.investigator_name }}{% else %}N/A{% endif %}</td>
+    <td class="value">{{ case.investigator_name }}</td>
     <td class="label">Investigation Window:</td>
-    <td class="value">{% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} – {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{{ case.start_date_formatted }} – {{ case.end_date_formatted }}</td>
   </tr>
 </table>
 
@@ -35,19 +35,16 @@
 
 ## 1. Executive Intelligence Overview
 
-<div class="risk-summary-box {{ case.overall_risk_level | lower | replace(' ', '-') }}">
-  <strong>Subject Risk Assessment:</strong> {% if case.overall_risk_classification %}{{ case.overall_risk_classification }}{% else %}N/A{% endif %}
-</div>
 
 ### 1.1 Subject Identity Summary
 <table class="edd-keyvalue-table">
   <tr>
     <td class="kv-label">Full Legal Name:</td>
-    <td class="kv-value">{% if case.primary_target_name %}{{ case.primary_target_name }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{{ case.primary_target_name }}</td>
   </tr>
   <tr>
     <td class="kv-label">Date / Place of Birth:</td>
-    <td class="kv-value">{% if case.target_dob_nationality %}{{ case.target_dob_nationality }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{{ case.target_dob_nationality }}</td>
   </tr>
   <tr>
     <td class="kv-label">Primary Residency / Location:</td>
@@ -55,7 +52,7 @@
   </tr>
   <tr>
     <td class="kv-label">Primary Occupation / Known Roles:</td>
-    <td class="kv-value">{% if case.target_appointed_roles %}{{ case.target_appointed_roles }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{{ case.target_appointed_roles }}</td>
   </tr>
 </table>
 
@@ -69,19 +66,19 @@
 
 ## 2. Digital Identity & Social Media Mapping
 
-{% if case.digital_identity_details_md %}{{ case.digital_identity_details_md | safe }}{% endif %}
+{{ case.digital_identity_details_md | safe }}
 
 ---
 
 ## 3. Directorships, Business Interests & Wealth Tracing
 
-{% if case.business_interests_md %}{{ case.business_interests_md | safe }}{% endif %}
+{{ case.business_interests_md | safe }}
 
 ---
 
 ## 4. Legal, Regulatory & Adverse Findings
 
-{% if case.legal_findings_md %}{{ case.legal_findings_md | safe }}{% endif %}
+{{ case.legal_findings_md | safe }}
 
 ---
 
