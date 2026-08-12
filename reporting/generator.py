@@ -214,6 +214,7 @@ def generate_report(case, client, firm, findings, output_path):
 
 {% endfor %}
 """
+        md_content = md_content.replace('{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}', detailed_findings_md)
         md_content = md_content.replace('{{ findings.detailed_findings }}', detailed_findings_md)
         env = SandboxedEnvironment()
         template = env.from_string(md_content)

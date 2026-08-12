@@ -51,7 +51,7 @@ def show_manage_findings():
     if findings:
         for f in findings:
             is_expanded = st.session_state.get('edit_finding_id') == f['id']
-            with st.expander(f"[{f['risk_level']}] {f['title']} ({f.get('domain_category', 'General')})", expanded=is_expanded):
+            with st.expander(f"[{f['risk_level']}] [{f['source_confidence']}] {f['title']} ({f.get('domain_category', 'General')})", expanded=is_expanded):
                 if is_expanded:
                     with st.form(f"edit_form_{f['id']}"):
                         e_title = st.text_input("Finding Title", value=f['title'])

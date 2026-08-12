@@ -30,12 +30,13 @@ def show_manage_cases():
     active_client_name = next(c['name'] for c in clients if c['id'] == active_client_id)
     
     CASE_TYPES = [
-        "Corporate Due Diligence",
+        "Enhanced Due Diligence",
         "Executive Threat Assessment",
         "Asset Tracing & Recovery",
         "Brand Protection & Anti-Counterfeiting",
         "Insider Threat Investigation",
         "Fraud & Financial Crime Investigation",
+        "Person Profile",
         "Custom OSINT Investigation"
     ]
     
@@ -62,7 +63,7 @@ def show_manage_cases():
                 ec_ref = col_c1.text_input("Case Reference Number", value=c.get('case_ref', ''))
                 ec_name = col_c2.text_input("Case Name", value=c['case_name'])
                 
-                ec_type_idx = CASE_TYPES.index(c.get('case_type', 'Corporate Due Diligence')) if c.get('case_type') in CASE_TYPES else 0
+                ec_type_idx = CASE_TYPES.index(c.get('case_type', 'Enhanced Due Diligence')) if c.get('case_type') in CASE_TYPES else 0
                 ec_type = st.selectbox("Case Type", CASE_TYPES, index=ec_type_idx)
                 
                 col_s, col_e, col_r = st.columns(3)
@@ -70,8 +71,8 @@ def show_manage_cases():
                 ec_end = col_e.text_input("End Date", value=c.get('end_date', ''))
                 ec_report_date = col_r.text_input("Report Date", value=c.get('report_date', ''))
                 
-                st.markdown("### Target & Legal Framework")
-                ec_target = st.text_area("Target Specification (Entities, Individuals, Domains, Handles)", value=c.get('target_scope', '') or '', height=100)
+                st.markdown("### Tasking & Legal Framework")
+                ec_tasking = st.text_area("Tasking Specification (Entities, Individuals, Domains, Handles)", value=c.get('target_scope', '') or '', height=100)
                 ec_gdpr = st.text_area("UK GDPR / Legitimate Interest Statement", value=c.get('legitimate_interest', '') or '', height=100, help="Document the lawful basis and necessity for processing personal data under UK GDPR.")
                 
                 st.markdown("### Assignment & Narrative")
@@ -116,22 +117,20 @@ def show_manage_cases():
                     selected_inv = investigator_options[ec_inv]
                     
                     db.update_case(
-                        c['id'], 
-                        ec_ref,
-                        ec_name, 
-                        ec_type, 
-                        ec_start, 
-                        ec_end, 
-                        ec_report_date, 
-                        selected_inv['name'], 
-                        selected_inv['title'], 
-                        selected_inv['credentials'], 
-                        selected_inv['bio'], 
-                        ec_target, 
-                        ec_gdpr,
-                        ec_exec_summary, 
-                        ec_key_findings, 
-                        t_used_json
+                        case_id=c['id'],
+                        case_ref=ec_ref,
+                        case_name=ec_name,
+                        case_type=ec_type,
+                        start_date=ec_start,
+                        end_date=ec_end,
+                        report_date=ec_report_date,
+                        lead_investigator=selected_inv['name'],
+                        investigator_description=selected_inv['bio'],
+                        target_scope=ec_tasking,
+                        legitimate_interest_assessment=ec_gdpr,
+                        executive_assessment=ec_exec_summary,
+                        key_findings_summary=ec_key_findings,
+                        tools_and_sources_used=t_used_json
                     )
                     
                     if save_as_default:
@@ -167,20 +166,18 @@ def show_manage_cases():
             new_id = db.add_case(
                 case_ref=c_ref,
                 case_name=c_name,
-                client_id=active_client_id, 
+                client_id=active_client_id,
                 case_type=c_type,
-                start_date=c_start, 
+                start_date=c_start,
                 end_date=c_end,
                 report_date=c_report_date,
-                investigator_name=selected_inv['name'],
-                investigator_title=selected_inv['title'],
-                investigator_credentials=selected_inv['credentials'],
-                investigator_bio=selected_inv['bio'],
+                lead_investigator=selected_inv['name'],
+                investigator_description=selected_inv['bio'],
                 target_scope='',
-                legitimate_interest=settings.get('default_legitimate_interest', ''),
-                executive_summary='',
+                legitimate_interest_assessment=settings.get('default_legitimate_interest', ''),
+                executive_assessment='',
                 key_findings_summary='',
-                tools_used=settings.get('tools_used', '')
+                tools_and_sources_used=settings.get('tools_used', '')
             )
             st.session_state.edit_case_id = new_id
             st.success(f"Successfully created case: {c_name}")

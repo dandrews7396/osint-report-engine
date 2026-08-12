@@ -8,8 +8,8 @@
 | **Prepared For:** | {{ client.name }} |
 | **Prepared By:** | {{ firm.name }} |
 | **Lead Investigator:** | {{ investigator.name }}{% if investigator.title %} ({{ investigator.title }}){% endif %} |
-| **Investigation Period:** | {{ case.start_date_formatted }} – {{ case.end_date_formatted }} |
-| **Report Date:** | {{ case.report_date_formatted }} |
+| **Investigation Period:** | {% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} – {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %} |
+| **Report Date:** | {% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %} |
 
 </div>
 
@@ -19,20 +19,20 @@
 
 ## Executive Summary
 
-{{ firm.executive_summary }}
+{{ case.executive_summary }}
 
 ### Key Findings Summary
-{{ firm.key_findings_summary }}
+{{ case.key_findings_summary }}
 
 ---
 
 ## Scope & Legitimate Interest
 
 **Target Scope:**  
-{{ firm.target_scope }}
+{{ case.target_scope }}
 
 **Legitimate Interest / Legal Basis:**  
-{{ firm.legitimate_interest }}
+{{ case.legitimate_interest }}
 
 ---
 
@@ -40,7 +40,7 @@
 
 {{ case.findings_chart | safe }}
 
-{{ findings_table | safe }}
+{% if case.findings_table %}{{ case.findings_table | safe }}{% else %}{{ findings_table | safe }}{% endif %}
 
 ---
 
@@ -50,7 +50,7 @@
 
 The following specialized open-source intelligence platforms, collection frameworks, and verification tools were utilized during this assessment:
 
-{{ case.tools_used_table | safe }}
+{% if case.tools_used_table %}{{ case.tools_used_table | safe }}{% else %}{{ case.tools_used | safe }}{% endif %}
 
 ---
 
@@ -67,4 +67,4 @@ The following specialized open-source intelligence platforms, collection framewo
 
 ## Detailed Findings & Intelligence Analysis
 
-{{ findings.detailed_findings }}
+{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}

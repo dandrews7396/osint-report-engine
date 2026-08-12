@@ -5,7 +5,7 @@
 
 </div>
 
-**Date:** {{ case.report_date_formatted }}  
+**Date:** {% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %}  
 **Case Reference:** {{ case.case_ref }}  
 **Client:** {{ client.name }}  
 
@@ -16,7 +16,7 @@
 This letter confirms that **{{ firm.name }}** was formally retained by **{{ client.name }}** to perform an Open Source Intelligence (OSINT) assessment under the following parameters:
 
 > **Target Scope:** {{ case.target_scope or case.case_name }}  
-> **Investigation Window:** {{ case.start_date_formatted }} through {{ case.end_date_formatted }}  
+> **Investigation Window:** {% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} through {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %}  
 > **Assessment Category:** {{ case.case_type }}  
 
 ### Compliance & Methodology Statement

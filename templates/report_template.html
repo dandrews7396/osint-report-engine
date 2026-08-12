@@ -2,70 +2,117 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ case.case_name }} - OSINT Intelligence Report</title>
+    <title>{{ case.case_ref }} - Corporate EDD Report</title>
     <style>
         @page {
             size: A4;
             margin: 20mm 15mm 20mm 15mm;
             @bottom-left {
-                content: "CONFIDENTIAL | {{ firm.name }}";
-                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                font-size: 8pt;
+                content: "STRICTLY CONFIDENTIAL - COMMERCIAL IN CONFIDENCE";
+                font-family: Arial, sans-serif;
+                font-size: 7.5pt;
+                font-weight: bold;
                 color: #718096;
             }
             @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
-                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-family: Arial, sans-serif;
                 font-size: 8pt;
                 color: #718096;
             }
         }
 
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 9.5pt;
+            line-height: 1.5;
+            color: #1a202c;
+        }
+
+        .header-container {
+            text-align: center;
+            border-bottom: 2px solid #1a202c;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .agency-title {
+            font-size: 11pt;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: #4a5568;
+        }
+
+        .report-title {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #000000;
+            margin-top: 5px;
+        }
+
+        .report-subtitle {
             font-size: 10pt;
-            line-height: 1.6;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            color: #2b6cb0;
+        }
+
+        /* Cover Meta Grid */
+        .edd-cover-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 8.5pt;
+        }
+
+        .edd-cover-grid td {
+            padding: 5px 8px;
+            border: 1px solid #cbd5e0;
+        }
+
+        .edd-cover-grid .label {
+            background-color: #edf2f7;
+            font-weight: bold;
+            width: 18%;
             color: #2d3748;
         }
 
-        h1 {
-            font-size: 24pt;
-            color: #1a202c;
-            border-bottom: 3px solid #2b6cb0;
-            padding-bottom: 10px;
-            margin-top: 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+        .edd-cover-grid .value {
+            width: 32%;
+            background-color: #ffffff;
         }
 
+        .highlight-red {
+            color: #c53030;
+            font-weight: bold;
+        }
+
+        /* Headings */
         h2 {
-            font-size: 15pt;
-            color: #2b6cb0;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 6px;
-            margin-top: 25px;
+            font-size: 12pt;
+            color: #1a202c;
+            border-bottom: 1px solid #2b6cb0;
+            padding-bottom: 4px;
+            margin-top: 22px;
+            text-transform: uppercase;
         }
 
         h3 {
-            font-size: 12pt;
-            color: #2d3748;
-            margin-top: 20px;
+            font-size: 10.5pt;
+            color: #2b6cb0;
+            margin-top: 16px;
         }
 
-        a {
-            color: #3182ce;
-            text-decoration: none;
-        }
-
+        /* Tables */
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 9.5pt;
+            margin: 12px 0;
+            font-size: 8.5pt;
         }
 
         th, td {
-            padding: 8px 12px;
+            padding: 6px 10px;
             border: 1px solid #cbd5e0;
             text-align: left;
         }
@@ -76,61 +123,94 @@
             font-weight: bold;
         }
 
-        .tools-table th {
-            background-color: #2b6cb0;
-        }
-
-        .risk-badge {
-            display: inline-block;
-            padding: 4px 10px;
+        .edd-keyvalue-table td.kv-label {
+            width: 30%;
+            background-color: #f7fafc;
             font-weight: bold;
-            font-size: 8.5pt;
-            color: #ffffff;
-            border-radius: 3px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
-        .risk-badge.Critical { background-color: #9b2c2c; }
-        .risk-badge.High { background-color: #c53030; }
-        .risk-badge.Medium { background-color: #dd6b20; }
-        .risk-badge.Low { background-color: #38a169; }
-        .risk-badge.Informational { background-color: #3182ce; }
+        /* Risk Callouts & Boxes */
+        .risk-summary-box {
+            padding: 10px 14px;
+            border-radius: 3px;
+            font-size: 10pt;
+            margin-bottom: 15px;
+            border-left: 5px solid #cbd5e0;
+            background-color: #f7fafc;
+        }
 
-        blockquote {
-            background: #f7fafc;
+        .risk-summary-box.medium-risk, .risk-summary-box.adverse-findings {
+            border-left-color: #dd6b20;
+            background-color: #fffaf0;
+        }
+
+        .risk-summary-box.high-risk {
+            border-left-color: #c53030;
+            background-color: #fff5f5;
+        }
+
+        .callout-warning {
+            background-color: #fffaf0;
+            border-left: 4px solid #dd6b20;
+            padding: 8px 12px;
+            margin: 12px 0;
+            font-size: 8.5pt;
+        }
+
+        .callout-note {
+            background-color: #f7fafc;
             border-left: 4px solid #3182ce;
-            margin: 15px 0;
-            padding: 10px 15px;
-            font-style: italic;
-            color: #4a5568;
-        }
-
-        code, pre {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #edf2f7;
-            border-radius: 3px;
-        }
-
-        pre {
-            padding: 12px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            padding: 8px 12px;
+            margin: 12px 0;
             font-size: 8.5pt;
-            border: 1px solid #e2e8f0;
         }
 
-        .markdown-content pre {
-            background-color: #1a202c;
-            color: #e2e8f0;
+        .executive-assessment-block {
+            background-color: #edf2f7;
+            padding: 10px;
+            border: 1px solid #cbd5e0;
+            margin-top: 15px;
+            font-size: 9pt;
         }
+
+        .hash-box {
+            background-color: #edf2f7;
+            border: 1px solid #cbd5e0;
+            padding: 8px;
+            font-size: 8pt;
+            margin: 15px 0;
+        }
+
+        .signoff-table {
+            border: none;
+            margin-top: 30px;
+        }
+
+        .signoff-table td {
+            border: none;
+            padding: 0;
+            vertical-align: top;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            font-weight: bold;
+            font-size: 7.5pt;
+            color: #fff;
+            border-radius: 2px;
+        }
+
+        .badge-high { background-color: #38a169; }
+        .badge-med { background-color: #dd6b20; }
+        .badge-low { background-color: #e53e3e; }
 
         hr {
             border: 0;
             height: 1px;
-            background: #e2e8f0;
-            margin: 25px 0;
+            background: #cbd5e0;
+            margin: 18px 0;
         }
     </style>
 </head>

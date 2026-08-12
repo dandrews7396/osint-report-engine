@@ -129,12 +129,18 @@ def get_cases() -> list[dict]:
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT c.*, cl.name as client_name 
+            SELECT 
+                c.id, c.case_ref, c.case_name, c.case_type, c.client_id, c.start_date, c.end_date, c.report_date,
+                c.lead_investigator AS investigator_name, c.investigator_description, c.target_scope,
+                c.legitimate_interest_assessment AS legitimate_interest, c.executive_assessment AS executive_summary,
+                c.key_findings_summary AS key_findings_summary, c.tools_and_sources_used AS tools_used, c.deleted_at,
+                cl.name as client_name
             FROM cases c 
             JOIN clients cl ON c.client_id = cl.id
             WHERE c.deleted_at IS NULL AND cl.deleted_at IS NULL
         """)
-        return [dict(row) for row in cursor.fetchall()]
+        rows = [dict(row) for row in cursor.fetchall()]
+        return rows
     except sqlite3.Error as e:
         print(f"[DB ERROR] get_cases: {e}")
         return []
@@ -168,13 +174,10 @@ def add_case(
     report_date: str = '',
     lead_investigator: str = '',
     investigator_description: str = '',
-    target_name: str = '',
-    target_type: str = 'Corporate',
-    companies_house_num: str = '',
+    target_scope: str = '',
     legitimate_interest_assessment: str = '',
-    overall_risk_rating: str = 'Low Risk',
     executive_assessment: str = '',
-    limitations_disclaimer: str = '',
+    key_findings_summary: str = '',
     tools_and_sources_used: str = ''
 ) -> int:
     conn = get_connection()
@@ -183,15 +186,15 @@ def add_case(
         cursor.execute("""
             INSERT INTO cases (
                 case_ref, case_name, client_id, case_type, start_date, end_date, report_date,
-                lead_investigator, investigator_description, target_name, target_type,
-                companies_house_num, legitimate_interest_assessment, overall_risk_rating,
-                executive_assessment, limitations_disclaimer, tools_and_sources_used
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                lead_investigator, investigator_description, target_scope,
+                legitimate_interest_assessment,
+                executive_assessment, key_findings_summary, tools_and_sources_used
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             case_ref, case_name, client_id, case_type, start_date, end_date, report_date,
-            lead_investigator, investigator_description, target_name, target_type,
-            companies_house_num, legitimate_interest_assessment, overall_risk_rating,
-            executive_assessment, limitations_disclaimer, tools_and_sources_used
+            lead_investigator, investigator_description, target_scope,
+            legitimate_interest_assessment, executive_assessment, key_findings_summary,
+            tools_and_sources_used
         ))
         new_id = cursor.lastrowid
         conn.commit()
@@ -213,13 +216,10 @@ def update_case(
     report_date: str,
     lead_investigator: str,
     investigator_description: str,
-    target_name: str,
-    target_type: str,
-    companies_house_num: str,
+    target_scope: str,
     legitimate_interest_assessment: str,
-    overall_risk_rating: str,
     executive_assessment: str,
-    limitations_disclaimer: str,
+    key_findings_summary: str,
     tools_and_sources_used: str
 ):
     conn = get_connection()
@@ -228,15 +228,15 @@ def update_case(
         cursor.execute("""
             UPDATE cases 
             SET case_ref = ?, case_name = ?, case_type = ?, start_date = ?, end_date = ?, report_date = ?, 
-                lead_investigator = ?, investigator_description = ?, target_name = ?, target_type = ?, 
-                companies_house_num = ?, legitimate_interest_assessment = ?, overall_risk_rating = ?, 
-                executive_assessment = ?, limitations_disclaimer = ?, tools_and_sources_used = ?
+                lead_investigator = ?, investigator_description = ?, target_scope = ?, 
+                legitimate_interest_assessment = ?, 
+                executive_assessment = ?, key_findings_summary = ?, tools_and_sources_used = ?
             WHERE id = ?
         """, (
             case_ref, case_name, case_type, start_date, end_date, report_date,
-            lead_investigator, investigator_description, target_name, target_type,
-            companies_house_num, legitimate_interest_assessment, overall_risk_rating,
-            executive_assessment, limitations_disclaimer, tools_and_sources_used, case_id
+            lead_investigator, investigator_description, target_scope,
+            legitimate_interest_assessment,
+            executive_assessment, key_findings_summary, tools_and_sources_used, case_id
         ))
         conn.commit()
     except sqlite3.Error as e:
@@ -361,7 +361,26 @@ def get_case_findings(case_id: int) -> list[dict]:
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM case_findings WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
-        return [dict(row) for row in cursor.fetchall()]
+        rows = [dict(row) for row in cursor.fetchall()]
+        mapped = []
+        for r in rows:
+            mapped.append({
+                'id': r.get('id'),
+                'case_id': r.get('case_id'),
+                'category': r.get('domain_category'),
+                'title': r.get('title'),
+                'risk_level': r.get('risk_level'),
+                'confidence_level': r.get('source_confidence'),
+                'summary': r.get('summary'),
+                'description': r.get('detailed_findings') or r.get('summary') or '',
+                'evidence': r.get('detailed_findings') or r.get('evidence_url') or '',
+                'evidence_url': r.get('evidence_url'),
+                'evidence_hash_sha256': r.get('evidence_hash_sha256'),
+                'source_citation': r.get('source_citation'),
+                'refs': r.get('source_citation') or (r.get('evidence_url') or ''),
+                'deleted_at': r.get('deleted_at')
+            })
+        return mapped
     except sqlite3.Error as e:
         print(f"[DB ERROR] get_case_findings: {e}")
         return []
