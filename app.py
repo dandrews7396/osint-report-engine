@@ -27,9 +27,14 @@ from views.admin import show_admin_users
 from views.setup import show_setup
 from views.login import show_login
 
-init_db()
+def ensure_db_initialized():
+    if not st.session_state.get('_db_initialized'):
+        init_db()
+        st.session_state._db_initialized = True
 
 def main():
+    ensure_db_initialized()
+
     if st.session_state.get('trigger_logout'):
         get_cookie_controller().remove('kairos_auth_token')
         st.session_state.clear()
