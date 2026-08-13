@@ -7,12 +7,24 @@ from captcha.image import ImageCaptcha
 from database.db import get_user, record_failed_login, reset_failed_logins, get_failed_logins
 from utils.auth import ph, get_cookie_controller, sign_token
 
+_HIDE_SIDEBAR_STYLE = """
+<style>
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="stSidebarNav"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+#MainMenu { visibility: hidden; }
+header { visibility: hidden; }
+footer { visibility: hidden; }
+</style>
+"""
+
 # Precomputed once so a login attempt for a *nonexistent* user still performs an
 # Argon2 verification of the same cost as a real one. Without this, the response
 # time (fast reject vs. slow hash) reveals which usernames exist.
 _DUMMY_HASH = ph.hash("kairos_constant_time_placeholder")
 
 def show_login():
+    st.markdown(_HIDE_SIDEBAR_STYLE, unsafe_allow_html=True)
     st.title("Osint Login")
     
     if 'mfa_user' in st.session_state:
