@@ -60,22 +60,23 @@ def restore_files_dialog():
 def show_dashboard():
     st.title("OSINT Intelligence Engine")
     st.write("Welcome to the OSINT Intelligence Engine. Use this dashboard as your central hub to manage intelligence cases, client rosters, firm configuration, and investigative personnel.")
-    
-    clients = db.get_clients()
-    cases = db.get_cases()
-    risks = db.get_risk_library()
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Active Clients", len(clients))
-    col2.metric("Total Cases", len(cases))
-    col3.metric("Risk Templates", len(risks))
 
     @fragment
-    def render_dashboard_interactive_sections():
+    def render_dashboard_metrics():
+        clients = db.get_clients()
+        cases = db.get_cases()
+        risks = db.get_risk_library()
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Active Clients", len(clients))
+        col2.metric("Total Cases", len(cases))
+        col3.metric("Risk Templates", len(risks))
+
+    @fragment
+    def render_client_overview():
         st.divider()
-        
         st.subheader("Client Overview")
-        
+
         with st.expander("Add New Client"):
             with st.form("dash_add_client"):
                 c_f1, c_f2 = st.columns(2)
@@ -88,58 +89,64 @@ def show_dashboard():
                     st.success(f"Added client: {c_name}")
                     st.rerun()
 
+        clients = db.get_clients()
+        cases = db.get_cases()
+
         if not clients:
             st.info("No clients found. Add a new client above to get started.")
-        else:
-            client_options = {c['name']: c['id'] for c in clients}
-            client_options_list = list(client_options.keys())
-            default_index = 0
-            if 'dashboard_active_client_id' not in st.session_state:
-                if 'active_client_id' in st.session_state:
-                    st.session_state.dashboard_active_client_id = st.session_state.active_client_id
-                else:
-                    recent_client = db.get_client_with_most_recent_finding()
-                    if recent_client:
-                        st.session_state.dashboard_active_client_id = recent_client
-                    else:
-                        st.session_state.dashboard_active_client_id = client_options[client_options_list[0]]
+            return
 
-            for i, c_name in enumerate(client_options_list):
-                if client_options[c_name] == st.session_state.dashboard_active_client_id:
-                    default_index = i
-                    break
-
-            selected_client_name = st.selectbox(
-                "Active Client",
-                client_options_list,
-                index=default_index,
-                key="dashboard_selected_client_name",
-            )
-            client_id = client_options[selected_client_name]
-            st.session_state.active_client_id = client_id
-            st.session_state.dashboard_active_client_id = client_id
-            
-            client_cases = [c for c in cases if c['client_id'] == client_id]
-            
-            if client_cases:
-                st.markdown(f"**Cases for {selected_client_name}**")
-                for cc in client_cases:
-                    with st.container():
-                        col_pn, col_pb1, col_pb2 = st.columns([2, 1, 1])
-                        col_pn.write(f"- **[{cc.get('case_ref', 'NO-REF')}]** {cc['case_name']} *({cc.get('case_type', 'Unknown Type')})*")
-                        if col_pb1.button("Edit Case", key=f"dash_go_case_{cc['id']}"):
-                            st.session_state.nav = "Manage Cases"
-                            st.session_state.edit_case_id = cc['id']
-                            st.rerun()
-                        if col_pb2.button("Add Findings", key=f"dash_add_find_{cc['id']}"):
-                            st.session_state.nav = "Case Findings"
-                            st.session_state.manage_findings_case_id = cc['id']
-                            st.rerun()
+        client_options = {c['name']: c['id'] for c in clients}
+        client_options_list = list(client_options.keys())
+        default_index = 0
+        if 'dashboard_active_client_id' not in st.session_state:
+            if 'active_client_id' in st.session_state:
+                st.session_state.dashboard_active_client_id = st.session_state.active_client_id
             else:
-                st.write(f"*No cases assigned to {selected_client_name} yet.*")
+                recent_client = db.get_client_with_most_recent_finding()
+                if recent_client:
+                    st.session_state.dashboard_active_client_id = recent_client
+                else:
+                    st.session_state.dashboard_active_client_id = client_options[client_options_list[0]]
 
+        for i, c_name in enumerate(client_options_list):
+            if client_options[c_name] == st.session_state.dashboard_active_client_id:
+                default_index = i
+                break
+
+        selected_client_name = st.selectbox(
+            "Active Client",
+            client_options_list,
+            index=default_index,
+            key="dashboard_selected_client_name",
+        )
+        client_id = client_options[selected_client_name]
+        st.session_state.active_client_id = client_id
+        st.session_state.dashboard_active_client_id = client_id
+
+        client_cases = [c for c in cases if c['client_id'] == client_id]
+
+        if client_cases:
+            st.markdown(f"**Cases for {selected_client_name}**")
+            for cc in client_cases:
+                with st.container():
+                    col_pn, col_pb1, col_pb2 = st.columns([2, 1, 1])
+                    col_pn.write(f"- **[{cc.get('case_ref', 'NO-REF')}]** {cc['case_name']} *({cc.get('case_type', 'Unknown Type')})*")
+                    if col_pb1.button("Edit Case", key=f"dash_go_case_{cc['id']}"):
+                        st.session_state.nav = "Manage Cases"
+                        st.session_state.edit_case_id = cc['id']
+                        st.rerun()
+                    if col_pb2.button("Add Findings", key=f"dash_add_find_{cc['id']}"):
+                        st.session_state.nav = "Case Findings"
+                        st.session_state.manage_findings_case_id = cc['id']
+                        st.rerun()
+        else:
+            st.write(f"*No cases assigned to {selected_client_name} yet.*")
+
+    @fragment
+    def render_firm_and_team():
         st.divider()
-        
+
         settings = db.get_settings()
         st.subheader("Firm Settings")
         with st.form("dash_firm_settings"):
@@ -172,7 +179,7 @@ def show_dashboard():
                         st.rerun()
         else:
             st.write("No investigators added yet.")
-            
+
         with st.expander("Add New Investigator"):
             with st.form("add_investigator"):
                 col_t1, col_t2 = st.columns(2)
@@ -185,10 +192,12 @@ def show_dashboard():
                     st.success("Added investigator.")
                     st.rerun()
 
+    @fragment
+    def render_data_management():
         st.divider()
         st.subheader("Data Management")
         st.write("Export your entire local database and investigation assets to a portable ZIP archive, or recover deleted intelligence records.")
-        
+
         col_dm1, col_dm2 = st.columns(2)
         with col_dm1:
             if st.button("Generate Backup Archive", use_container_width=True):
@@ -196,14 +205,17 @@ def show_dashboard():
                 shutil.make_archive('kairos_backup', 'zip', 'data')
                 st.session_state.backup_ready = True
                 st.rerun()
-                
+
             if st.session_state.get('backup_ready'):
                 if os.path.exists('kairos_backup.zip'):
                     with open('kairos_backup.zip', 'rb') as f:
                         st.download_button("Download ZIP", data=f, file_name="kairos_backup.zip", mime="application/zip", use_container_width=True)
-                        
+
         with col_dm2:
             if st.button("Restore Deleted Files", use_container_width=True):
                 restore_files_dialog()
 
-    render_dashboard_interactive_sections()
+    render_dashboard_metrics()
+    render_client_overview()
+    render_firm_and_team()
+    render_data_management()
