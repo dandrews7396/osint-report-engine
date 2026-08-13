@@ -18,8 +18,29 @@ def show_generate_report():
         return
         
     case_options = {f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})": c for c in cases}
-    selected_cname = st.selectbox("Select Active Case", list(case_options.keys()))
+    case_options_list = list(case_options.keys())
+    default_index = 0
+    if 'generate_report_case_id' not in st.session_state:
+        if 'manage_findings_case_id' in st.session_state:
+            st.session_state.generate_report_case_id = st.session_state.manage_findings_case_id
+        elif 'edit_case_id' in st.session_state:
+            st.session_state.generate_report_case_id = st.session_state.edit_case_id
+        elif cases:
+            st.session_state.generate_report_case_id = cases[0]['id']
+
+    for i, c_name in enumerate(case_options_list):
+        if case_options[c_name]['id'] == st.session_state.generate_report_case_id:
+            default_index = i
+            break
+
+    selected_cname = st.selectbox(
+        "Select Active Case",
+        case_options_list,
+        index=default_index,
+        key="generate_report_selected_case_name",
+    )
     case = case_options[selected_cname]
+    st.session_state.generate_report_case_id = case['id']
     
     findings = db.get_case_findings(case['id'])
     st.info(f"**Case Reference:** `{case.get('case_ref', 'N/A')}` | **Total Findings:** `{len(findings)}`")

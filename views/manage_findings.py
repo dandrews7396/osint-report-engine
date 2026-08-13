@@ -26,8 +26,14 @@ def show_manage_findings():
                 default_index = i
                 break
                 
-    selected_case_label = st.selectbox("Select Active Case", case_options_list, index=default_index)
+    selected_case_label = st.selectbox(
+        "Select Active Case",
+        case_options_list,
+        index=default_index,
+        key="manage_findings_selected_case_label",
+    )
     case_id = case_options[selected_case_label]
+    st.session_state.manage_findings_case_id = case_id
     active_case = next((c for c in cases if c['id'] == case_id), None)
     
     DOMAIN_CATEGORIES = [
@@ -47,37 +53,44 @@ def show_manage_findings():
     st.divider()
     st.subheader("Current Case Intelligence Findings")
     
-    findings = db.get_case_findings(case_id)
+    findings = db.get_case_findings_overview(case_id)
     if findings:
         for f in findings:
             is_expanded = st.session_state.get('edit_finding_id') == f['id']
-            with st.expander(f"[{f['risk_level']}] [{f['source_confidence']}] {f['title']} ({f.get('domain_category', 'General')})", expanded=is_expanded):
+            with st.expander(f"[{f['risk_level']}] [{f['source_confidence']}] {f['title']} ({f.get('category', 'General')})", expanded=is_expanded):
                 if is_expanded:
+                    full_finding = db.get_case_finding(f['id']) or f
                     with st.form(f"edit_form_{f['id']}"):
-                        e_title = st.text_input("Finding Title", value=f['title'])
+                        e_title = st.text_input("Finding Title", value=full_finding['title'])
                         
                         col_cat, col_risk, col_conf = st.columns(3)
-                        cat_idx = DOMAIN_CATEGORIES.index(f['domain_category']) if f['domain_category'] in DOMAIN_CATEGORIES else 0
+                        cat_idx = DOMAIN_CATEGORIES.index(full_finding['category']) if full_finding['category'] in DOMAIN_CATEGORIES else 0
                         e_category = col_cat.selectbox("Domain Category", DOMAIN_CATEGORIES, index=cat_idx)
                         
-                        risk_idx = RISK_LEVELS.index(f['risk_level']) if f['risk_level'] in RISK_LEVELS else 2
+                        risk_idx = RISK_LEVELS.index(full_finding['risk_level']) if full_finding['risk_level'] in RISK_LEVELS else 2
                         e_risk = col_risk.selectbox("Risk Level", RISK_LEVELS, index=risk_idx)
                         
-                        conf_idx = CONFIDENCE_LEVELS.index(f.get('source_confidence', 'High Confidence')) if f.get('source_confidence') in CONFIDENCE_LEVELS else 0
+                        conf_idx = CONFIDENCE_LEVELS.index(full_finding.get('confidence_level', 'High Confidence')) if full_finding.get('confidence_level') in CONFIDENCE_LEVELS else 0
                         e_conf = col_conf.selectbox("Source Confidence", CONFIDENCE_LEVELS, index=conf_idx)
                         
-                        e_summary = st.text_area("Executive Summary", value=f.get('summary', '') or '', height=100)
+                        e_summary = st.text_area("Executive Summary", value=full_finding.get('summary', '') or '', height=100)
                         
                         st.markdown("**Detailed Findings & Intelligence Analysis**")
-                        jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "height": 350, "uploader": {"insertImageAsBase64URI": True}}
-                        safe_details = sanitize_rich_html(restore_base64_images(f.get('detailed_findings', '') or ''))
+                        st.caption("You can paste images directly into this field; processing happens when you save.")
+                        jodit_config = {
+                            "theme": "dark",
+                            "style": {"background": "#0e1117", "color": "#ffffff"},
+                            "height": 350,
+                            "uploader": {"insertImageAsBase64URI": True},
+                        }
+                        safe_details = restore_base64_images(full_finding.get('description', '') or '')
                         e_details = st_jodit(value=safe_details, config=jodit_config, key=f"e_details_{f['id']}")
                         
                         st.markdown("**Digital Evidence & Provenance**")
                         col_e1, col_e2 = st.columns(2)
-                        e_url = col_e1.text_input("Evidence URL / Archive Link", value=f.get('evidence_url', '') or '')
-                        e_hash = col_e2.text_input("Evidence File SHA-256 Hash", value=f.get('evidence_hash_sha256', '') or '')
-                        e_citation = st.text_input("Source Citation / Document Reference", value=f.get('source_citation', '') or '')
+                        e_url = col_e1.text_input("Evidence URL / Archive Link", value=full_finding.get('evidence_url', '') or '')
+                        e_hash = col_e2.text_input("Evidence File SHA-256 Hash", value=full_finding.get('evidence_hash_sha256', '') or '')
+                        e_citation = st.text_input("Source Citation / Document Reference", value=full_finding.get('source_citation', '') or '')
                         
                         if st.form_submit_button("Save Changes"):
                             processed_details = process_base64_images(sanitize_rich_html(e_details), active_case['client_id'], case_id)
@@ -164,7 +177,14 @@ def show_manage_findings():
         mf_summary = st.text_area("Executive Summary", placeholder="Brief high-level summary of the intelligence item...")
         
         st.markdown("**Detailed Findings & Narrative**")
-        jodit_config = {"theme": "dark", "style": {"background": "#0e1117", "color": "#ffffff"}, "placeholder": "Enter detailed analytical narrative, screenshots, or extracted raw intelligence here...", "height": 350, "uploader": {"insertImageAsBase64URI": True}}
+        st.caption("You can paste images directly into this field; processing happens when you add the finding.")
+        jodit_config = {
+            "theme": "dark",
+            "style": {"background": "#0e1117", "color": "#ffffff"},
+            "placeholder": "Enter detailed analytical narrative, screenshots, or extracted raw intelligence here...",
+            "height": 350,
+            "uploader": {"insertImageAsBase64URI": True},
+        }
         mf_details = st_jodit(value="", config=jodit_config, key=f"mf_details_add_{st.session_state.add_finding_key}")
         
         st.markdown("**Digital Evidence & Chain of Custody**")

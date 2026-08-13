@@ -380,6 +380,40 @@ def update_in_risk_library(
         conn.close()
 
 # --- Case Findings (Formerly Project Findings) ---
+def _map_case_finding_row(r: dict, include_details: bool = True) -> dict:
+    mapped = {
+        'id': r.get('id'),
+        'case_id': r.get('case_id'),
+        'category': r.get('domain_category'),
+        'title': r.get('title'),
+        'risk_level': r.get('risk_level'),
+        'confidence_level': r.get('source_confidence'),
+        'summary': r.get('summary'),
+        'evidence_url': r.get('evidence_url'),
+        'evidence_hash_sha256': r.get('evidence_hash_sha256'),
+        'source_citation': r.get('source_citation'),
+        'refs': r.get('source_citation') or (r.get('evidence_url') or ''),
+        'deleted_at': r.get('deleted_at')
+    }
+    if include_details:
+        mapped['description'] = r.get('detailed_findings') or r.get('summary') or ''
+        mapped['evidence'] = r.get('detailed_findings') or r.get('evidence_url') or ''
+    return mapped
+
+@st.cache_data(show_spinner=False)
+def get_case_finding(finding_id: int) -> dict | None:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM case_findings WHERE id = ? AND deleted_at IS NULL", (finding_id,))
+        row = cursor.fetchone()
+        return _map_case_finding_row(dict(row), include_details=True) if row else None
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_case_finding: {e}")
+        return None
+    finally:
+        conn.close()
+
 @st.cache_data(show_spinner=False)
 def get_case_findings(case_id: int) -> list[dict]:
     conn = get_connection()
@@ -387,27 +421,23 @@ def get_case_findings(case_id: int) -> list[dict]:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM case_findings WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
         rows = [dict(row) for row in cursor.fetchall()]
-        mapped = []
-        for r in rows:
-            mapped.append({
-                'id': r.get('id'),
-                'case_id': r.get('case_id'),
-                'category': r.get('domain_category'),
-                'title': r.get('title'),
-                'risk_level': r.get('risk_level'),
-                'confidence_level': r.get('source_confidence'),
-                'summary': r.get('summary'),
-                'description': r.get('detailed_findings') or r.get('summary') or '',
-                'evidence': r.get('detailed_findings') or r.get('evidence_url') or '',
-                'evidence_url': r.get('evidence_url'),
-                'evidence_hash_sha256': r.get('evidence_hash_sha256'),
-                'source_citation': r.get('source_citation'),
-                'refs': r.get('source_citation') or (r.get('evidence_url') or ''),
-                'deleted_at': r.get('deleted_at')
-            })
-        return mapped
+        return [_map_case_finding_row(r, include_details=True) for r in rows]
     except sqlite3.Error as e:
         print(f"[DB ERROR] get_case_findings: {e}")
+        return []
+    finally:
+        conn.close()
+
+@st.cache_data(show_spinner=False)
+def get_case_findings_overview(case_id: int) -> list[dict]:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, case_id, domain_category, title, risk_level, source_confidence, summary, evidence_url, evidence_hash_sha256, source_citation, deleted_at FROM case_findings WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
+        rows = [dict(row) for row in cursor.fetchall()]
+        return [_map_case_finding_row(r, include_details=False) for r in rows]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_case_findings_overview: {e}")
         return []
     finally:
         conn.close()

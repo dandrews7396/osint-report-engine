@@ -80,27 +80,36 @@ def show_dashboard():
                 st.success(f"Added client: {c_name}")
                 st.rerun()
 
-    clients = db.get_clients()
     if not clients:
         st.info("No clients found. Add a new client above to get started.")
     else:
         client_options = {c['name']: c['id'] for c in clients}
         client_options_list = list(client_options.keys())
         default_index = 0
-        if 'active_client_id' not in st.session_state:
-            recent_client = db.get_client_with_most_recent_finding()
-            if recent_client:
-                st.session_state.active_client_id = recent_client
-                
-        if 'active_client_id' in st.session_state:
-            for i, c_name in enumerate(client_options_list):
-                if client_options[c_name] == st.session_state.active_client_id:
-                    default_index = i
-                    break
-                    
-        selected_client_name = st.selectbox("Active Client", client_options_list, index=default_index)
+        if 'dashboard_active_client_id' not in st.session_state:
+            if 'active_client_id' in st.session_state:
+                st.session_state.dashboard_active_client_id = st.session_state.active_client_id
+            else:
+                recent_client = db.get_client_with_most_recent_finding()
+                if recent_client:
+                    st.session_state.dashboard_active_client_id = recent_client
+                else:
+                    st.session_state.dashboard_active_client_id = client_options[client_options_list[0]]
+
+        for i, c_name in enumerate(client_options_list):
+            if client_options[c_name] == st.session_state.dashboard_active_client_id:
+                default_index = i
+                break
+
+        selected_client_name = st.selectbox(
+            "Active Client",
+            client_options_list,
+            index=default_index,
+            key="dashboard_selected_client_name",
+        )
         client_id = client_options[selected_client_name]
         st.session_state.active_client_id = client_id
+        st.session_state.dashboard_active_client_id = client_id
         
         client_cases = [c for c in cases if c['client_id'] == client_id]
         

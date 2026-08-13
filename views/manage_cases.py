@@ -94,7 +94,7 @@ def show_manage_cases():
                         t_list = [{"Name": "Tool", "Description": tools_str}]
                 except Exception:
                     t_list = [{"Name": "Unknown Tool", "Description": tools_str}] if tools_str else []
-                    
+
                 if not t_list:
                     t_list = [{"Name": "", "Description": ""}]
                 
