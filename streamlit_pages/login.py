@@ -6,10 +6,12 @@ st.set_page_config(page_title="OSINT Intelligence Engine", page_icon="assets/DII
 st.markdown(
     """
     <style>
-    [data-testid="stSidebar"] { display: none; }
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="stSidebarNav"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    #MainMenu { visibility: hidden; }
+    header { visibility: hidden; }
+    footer { visibility: hidden; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -21,6 +23,6 @@ from views.login import show_login
 init_db()
 
 if st.session_state.get('logged_in'):
-    st.switch_page(Path("pages/dashboard.py"))
+    st.switch_page(Path("streamlit_pages/dashboard.py"))
 
 show_login()

@@ -1,12 +1,11 @@
 import streamlit as st
 from argon2 import PasswordHasher
 from database import operations as db
-from database.db import get_user_count, init_db
+from database.db import init_db
 import secrets
 import hmac
 import hashlib
 import time
-from pathlib import Path
 
 # Server-side token lifetime; kept in sync with the cookie max_age in login.py.
 # Because the expiry is part of the signed payload, a leaked token stops working
@@ -68,10 +67,6 @@ def require_page_auth() -> bool:
 
     st.session_state.logged_in = False
     st.session_state.pop('username', None)
-    target = Path("pages/setup.py") if get_user_count() == 0 else Path("pages/login.py")
-    try:
-        st.switch_page(target)
-    except Exception:
-        st.warning("Please log in to access this page.")
-        st.stop()
+    st.warning("Please log in to access this page.")
+    st.stop()
     return False

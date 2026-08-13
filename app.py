@@ -1,5 +1,4 @@
 import streamlit as st
-from pathlib import Path
 
 st.set_page_config(page_title="OSINT Intelligence Engine", page_icon="assets/DIILogo.png", layout="wide")
 
@@ -14,8 +13,6 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 from database.db import init_db, get_user_count
 from utils.auth import get_cookie_controller
-from utils.helpers import get_image_base64
-
 from views.setup import show_setup
 from views.login import show_login
 
@@ -29,7 +26,7 @@ def logout_page():
     get_cookie_controller().remove('kairos_auth_token')
     st.session_state.clear()
     st.session_state.logged_out = True
-    st.switch_page(Path("pages/login.py"))
+    st.rerun()
 
 def main():
     ensure_db_initialized()
@@ -59,25 +56,49 @@ def main():
             show_login()
         return
 
-    logo_b64 = get_image_base64("assets/DIILogo.png")
-    st.sidebar.markdown(f'<a href="https://osint-sec.com" target="_blank"><img src="data:image/png;base64,{logo_b64}" alt="DII" width="75%" style="margin-bottom: 20px;"></a>', unsafe_allow_html=True)
-    st.sidebar.title("OSINT Intelligence Engine")
+    menu = ["Dashboard", "Manage Clients", "Manage Cases", "Case Findings", "Risk Library", "Generate Report", "Templates", "Settings", "Profile", "Admin: Users", "Logout"]
+    if "nav" not in st.session_state or st.session_state.nav not in menu:
+        st.session_state.nav = "Dashboard"
 
-    pages = [
-        st.Page(Path("pages/dashboard.py"), title="Dashboard", icon="📊", default=True),
-        st.Page(Path("pages/manage_clients.py"), title="Manage Clients", icon="👥"),
-        st.Page(Path("pages/manage_cases.py"), title="Manage Cases", icon="📁"),
-        st.Page(Path("pages/manage_findings.py"), title="Case Findings", icon="🧠"),
-        st.Page(Path("pages/risk_library.py"), title="Risk Library", icon="📚"),
-        st.Page(Path("pages/generate_report.py"), title="Generate Report", icon="📝"),
-        st.Page(Path("pages/templates.py"), title="Templates", icon="🧩"),
-        st.Page(Path("pages/settings.py"), title="Settings", icon="⚙️"),
-        st.Page(Path("pages/profile.py"), title="Profile", icon="🔐"),
-        st.Page(Path("pages/admin.py"), title="Admin: Users", icon="🛡️"),
-        st.Page(logout_page, title="Logout", icon="🚪"),
-    ]
-    nav = st.navigation(pages, position="sidebar")
-    nav.run()
+    if st.sidebar.button("Logout"):
+        logout_page()
+        return
+
+    choice = st.sidebar.radio("Navigation", menu[:-1], index=menu[:-1].index(st.session_state.nav))
+    if choice != st.session_state.nav:
+        st.session_state.nav = choice
+        st.rerun()
+
+    if st.session_state.nav == "Dashboard":
+        from views.dashboard import show_dashboard
+        show_dashboard()
+    elif st.session_state.nav == "Manage Clients":
+        from views.manage_clients import show_manage_clients
+        show_manage_clients()
+    elif st.session_state.nav == "Manage Cases":
+        from views.manage_cases import show_manage_cases
+        show_manage_cases()
+    elif st.session_state.nav == "Case Findings":
+        from views.manage_findings import show_manage_findings
+        show_manage_findings()
+    elif st.session_state.nav == "Risk Library":
+        from views.risk_library import show_risk_library
+        show_risk_library()
+    elif st.session_state.nav == "Generate Report":
+        from views.generate_report import show_generate_report
+        show_generate_report()
+    elif st.session_state.nav == "Templates":
+        from views.templates import show_templates
+        show_templates()
+    elif st.session_state.nav == "Settings":
+        from views.settings import show_settings
+        show_settings()
+    elif st.session_state.nav == "Profile":
+        from views.profile import show_profile
+        show_profile()
+    elif st.session_state.nav == "Admin: Users":
+        from views.admin import show_admin_users
+        show_admin_users()
 
 if __name__ == "__main__":
     main()
