@@ -1,10 +1,12 @@
 import streamlit as st
 from argon2 import PasswordHasher
 from database import operations as db
+from database.db import get_user_count
 import secrets
 import hmac
 import hashlib
 import time
+from pathlib import Path
 
 # Server-side token lifetime; kept in sync with the cookie max_age in login.py.
 # Because the expiry is part of the signed payload, a leaked token stops working
@@ -49,3 +51,25 @@ def verify_token(token: str) -> str:
         return username
     except Exception:
         return None
+
+def require_page_auth() -> bool:
+    if st.session_state.get('logged_in') and st.session_state.get('username'):
+        return True
+
+    auth_token = get_cookie_controller().get('kairos_auth_token')
+    if auth_token:
+        verified_username = verify_token(auth_token)
+        if verified_username:
+            st.session_state.logged_in = True
+            st.session_state.username = verified_username
+            return True
+
+    st.session_state.logged_in = False
+    st.session_state.pop('username', None)
+    target = Path("pages/setup.py") if get_user_count() == 0 else Path("pages/login.py")
+    try:
+        st.switch_page(target)
+    except Exception:
+        st.warning("Please log in to access this page.")
+        st.stop()
+    return False

@@ -29,8 +29,7 @@ def logout_page():
     get_cookie_controller().remove('kairos_auth_token')
     st.session_state.clear()
     st.session_state.logged_out = True
-    st.info("Securely logging you out...")
-    st.rerun()
+    st.switch_page(Path("pages/login.py"))
 
 def main():
     ensure_db_initialized()
