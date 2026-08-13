@@ -91,6 +91,23 @@ def add_client(name: str, client_type: str = 'Law Firm', contact_email: str = ''
     finally:
         conn.close()
 
+def update_client(client_id: int, name: str, client_type: str = 'Law Firm', contact_email: str = '', description: str = ''):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE clients
+            SET name = ?, client_type = ?, contact_email = ?, description = ?
+            WHERE id = ? AND deleted_at IS NULL
+        """, (name, client_type, contact_email, description, client_id))
+        conn.commit()
+        _clear_read_caches()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_client: {e}")
+    finally:
+        conn.close()
+
 def delete_client(client_id: int):
     conn = get_connection()
     try:
