@@ -27,10 +27,8 @@ def show_dashboard():
         st.subheader("Quick Navigation")
         nav1, nav2 = st.columns(2)
         if nav1.button("Manage Clients", use_container_width=True):
-            st.session_state.nav = "Manage Clients"
-            st.rerun()
+            st.switch_page("pages/manage_clients.py")
         if nav2.button("Settings", use_container_width=True):
-            st.session_state.nav = "Settings"
-            st.rerun()
+            st.switch_page("pages/settings.py")
 
     render_dashboard()

@@ -54,8 +54,7 @@ def show_manage_clients():
                 col1, col2 = st.columns(2)
                 if col1.button("Set Active", key=f"active_client_{client['id']}"):
                     st.session_state.active_client_id = client["id"]
-                    st.session_state.nav = "Manage Cases"
-                    st.rerun()
+                    st.switch_page("pages/manage_cases.py")
                 if col2.button("Delete Client", key=f"delete_client_{client['id']}"):
                     db.delete_client(client["id"])
                     st.success("Client deleted.")
