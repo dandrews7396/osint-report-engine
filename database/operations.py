@@ -1,6 +1,12 @@
 import sqlite3
 import streamlit as st
 from database.db import get_connection
+from database.subjects import (
+    decode_subject_data,
+    encode_subject_data,
+    subject_display_name,
+    subject_summary_lines,
+)
 
 def _clear_read_caches():
     st.cache_data.clear()
@@ -11,6 +17,7 @@ def cleanup_deleted_items():
     try:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM case_findings WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
+        cursor.execute("DELETE FROM case_subjects WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
         cursor.execute("DELETE FROM cases WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
         cursor.execute("DELETE FROM clients WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
         conn.commit()
@@ -114,6 +121,7 @@ def delete_client(client_id: int):
         cursor = conn.cursor()
         cursor.execute("UPDATE clients SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (client_id,))
         cursor.execute("UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE client_id = ? AND deleted_at IS NULL", (client_id,))
+        cursor.execute("UPDATE case_subjects SET deleted_at = CURRENT_TIMESTAMP WHERE case_id IN (SELECT id FROM cases WHERE client_id = ?) AND deleted_at IS NULL", (client_id,))
         cursor.execute("""
             UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP 
             WHERE case_id IN (SELECT id FROM cases WHERE client_id = ?) 
@@ -132,6 +140,9 @@ def restore_client(client_id: int):
     try:
         cursor = conn.cursor()
         cursor.execute("UPDATE clients SET deleted_at = NULL WHERE id = ?", (client_id,))
+        cursor.execute("UPDATE cases SET deleted_at = NULL WHERE client_id = ?", (client_id,))
+        cursor.execute("UPDATE case_subjects SET deleted_at = NULL WHERE case_id IN (SELECT id FROM cases WHERE client_id = ?)", (client_id,))
+        cursor.execute("UPDATE case_findings SET deleted_at = NULL WHERE case_id IN (SELECT id FROM cases WHERE client_id = ?)", (client_id,))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -144,6 +155,9 @@ def hard_delete_client(client_id: int):
     conn = get_connection()
     try:
         cursor = conn.cursor()
+        cursor.execute("DELETE FROM case_findings WHERE case_id IN (SELECT id FROM cases WHERE client_id = ?)", (client_id,))
+        cursor.execute("DELETE FROM case_subjects WHERE case_id IN (SELECT id FROM cases WHERE client_id = ?)", (client_id,))
+        cursor.execute("DELETE FROM cases WHERE client_id = ?", (client_id,))
         cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
         conn.commit()
         _clear_read_caches()
@@ -284,6 +298,7 @@ def delete_case(case_id: int):
     try:
         cursor = conn.cursor()
         cursor.execute("UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (case_id,))
+        cursor.execute("UPDATE case_subjects SET deleted_at = CURRENT_TIMESTAMP WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
         cursor.execute("UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
         conn.commit()
         _clear_read_caches()
@@ -298,6 +313,8 @@ def restore_case(case_id: int):
     try:
         cursor = conn.cursor()
         cursor.execute("UPDATE cases SET deleted_at = NULL WHERE id = ?", (case_id,))
+        cursor.execute("UPDATE case_subjects SET deleted_at = NULL WHERE case_id = ?", (case_id,))
+        cursor.execute("UPDATE case_findings SET deleted_at = NULL WHERE case_id = ?", (case_id,))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -310,12 +327,186 @@ def hard_delete_case(case_id: int):
     conn = get_connection()
     try:
         cursor = conn.cursor()
+        cursor.execute("DELETE FROM case_findings WHERE case_id = ?", (case_id,))
+        cursor.execute("DELETE FROM case_subjects WHERE case_id = ?", (case_id,))
         cursor.execute("DELETE FROM cases WHERE id = ?", (case_id,))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] hard_delete_case: {e}")
+    finally:
+        conn.close()
+
+# --- Case Subjects ---
+def _map_case_subject_row(row: dict) -> dict:
+    subject_type = row.get("subject_type", "Other Subject")
+    subject_data = decode_subject_data(subject_type, row.get("subject_data_json"))
+    display_name = row.get("display_name") or subject_display_name(subject_type, subject_data, fallback="Subject")
+    return {
+        "id": row.get("id"),
+        "case_id": row.get("case_id"),
+        "subject_type": subject_type,
+        "relationship_to_case": row.get("relationship_to_case", ""),
+        "display_name": display_name,
+        "subject_data": subject_data,
+        "notes": row.get("notes", "") or "",
+        "deleted_at": row.get("deleted_at"),
+        "finding_count": row.get("finding_count", 0),
+        "summary_lines": subject_summary_lines(subject_type, subject_data),
+    }
+
+
+@st.cache_data(show_spinner=False)
+def get_case_subject(subject_id: int) -> dict | None:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM case_subjects WHERE id = ? AND deleted_at IS NULL", (subject_id,))
+        row = cursor.fetchone()
+        return _map_case_subject_row(dict(row)) if row else None
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_case_subject: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+@st.cache_data(show_spinner=False)
+def get_case_subjects(case_id: int) -> list[dict]:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.*, COUNT(f.id) AS finding_count
+            FROM case_subjects s
+            LEFT JOIN case_findings f ON f.subject_id = s.id AND f.deleted_at IS NULL
+            WHERE s.case_id = ? AND s.deleted_at IS NULL
+            GROUP BY s.id
+            ORDER BY s.id DESC
+        """, (case_id,))
+        return [_map_case_subject_row(dict(row)) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_case_subjects: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+@st.cache_data(show_spinner=False)
+def get_deleted_case_subjects() -> list[dict]:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.*, c.case_name, cl.name AS client_name
+            FROM case_subjects s
+            JOIN cases c ON s.case_id = c.id
+            JOIN clients cl ON c.client_id = cl.id
+            WHERE s.deleted_at IS NOT NULL
+        """)
+        return [_map_case_subject_row(dict(row)) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_deleted_case_subjects: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def add_case_subject(
+    case_id: int,
+    subject_type: str,
+    relationship_to_case: str,
+    display_name: str,
+    subject_data: dict,
+    notes: str = '',
+) -> int:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO case_subjects (
+                case_id, subject_type, relationship_to_case, display_name, subject_data_json, notes
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (case_id, subject_type, relationship_to_case, display_name, encode_subject_data(subject_type, subject_data), notes))
+        new_id = cursor.lastrowid
+        conn.commit()
+        _clear_read_caches()
+        return new_id
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] add_case_subject: {e}")
+        raise e
+    finally:
+        conn.close()
+
+
+def update_case_subject(
+    subject_id: int,
+    subject_type: str,
+    relationship_to_case: str,
+    display_name: str,
+    subject_data: dict,
+    notes: str = '',
+):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE case_subjects
+            SET subject_type = ?, relationship_to_case = ?, display_name = ?, subject_data_json = ?, notes = ?
+            WHERE id = ? AND deleted_at IS NULL
+        """, (subject_type, relationship_to_case, display_name, encode_subject_data(subject_type, subject_data), notes, subject_id))
+        conn.commit()
+        _clear_read_caches()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] update_case_subject: {e}")
+    finally:
+        conn.close()
+
+
+def delete_case_subject(subject_id: int):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE case_subjects SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (subject_id,))
+        cursor.execute("UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP WHERE subject_id = ? AND deleted_at IS NULL", (subject_id,))
+        conn.commit()
+        _clear_read_caches()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] delete_case_subject: {e}")
+    finally:
+        conn.close()
+
+
+def restore_case_subject(subject_id: int):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE case_subjects SET deleted_at = NULL WHERE id = ?", (subject_id,))
+        cursor.execute("UPDATE case_findings SET deleted_at = NULL WHERE subject_id = ?", (subject_id,))
+        conn.commit()
+        _clear_read_caches()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] restore_case_subject: {e}")
+    finally:
+        conn.close()
+
+
+def hard_delete_case_subject(subject_id: int):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM case_findings WHERE subject_id = ?", (subject_id,))
+        cursor.execute("DELETE FROM case_subjects WHERE id = ?", (subject_id,))
+        conn.commit()
+        _clear_read_caches()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"[DB ERROR] hard_delete_case_subject: {e}")
     finally:
         conn.close()
 
@@ -401,6 +592,8 @@ def _map_case_finding_row(r: dict, include_details: bool = True) -> dict:
     mapped = {
         'id': r.get('id'),
         'case_id': r.get('case_id'),
+        'subject_id': r.get('subject_id'),
+        'subject_name': r.get('subject_name'),
         'category': r.get('domain_category'),
         'title': r.get('title'),
         'risk_level': r.get('risk_level'),
@@ -422,7 +615,12 @@ def get_case_finding(finding_id: int) -> dict | None:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM case_findings WHERE id = ? AND deleted_at IS NULL", (finding_id,))
+        cursor.execute("""
+            SELECT f.*, s.display_name AS subject_name
+            FROM case_findings f
+            LEFT JOIN case_subjects s ON f.subject_id = s.id
+            WHERE f.id = ? AND f.deleted_at IS NULL
+        """, (finding_id,))
         row = cursor.fetchone()
         return _map_case_finding_row(dict(row), include_details=True) if row else None
     except sqlite3.Error as e:
@@ -436,7 +634,12 @@ def get_case_findings(case_id: int) -> list[dict]:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM case_findings WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
+        cursor.execute("""
+            SELECT f.*, s.display_name AS subject_name
+            FROM case_findings f
+            LEFT JOIN case_subjects s ON f.subject_id = s.id
+            WHERE f.case_id = ? AND f.deleted_at IS NULL
+        """, (case_id,))
         rows = [dict(row) for row in cursor.fetchall()]
         return [_map_case_finding_row(r, include_details=True) for r in rows]
     except sqlite3.Error as e:
@@ -450,7 +653,13 @@ def get_case_findings_overview(case_id: int) -> list[dict]:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, case_id, domain_category, title, risk_level, source_confidence, summary, evidence_url, evidence_hash_sha256, source_citation, deleted_at FROM case_findings WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
+        cursor.execute("""
+            SELECT f.id, f.case_id, f.subject_id, s.display_name AS subject_name, f.domain_category, f.title, f.risk_level, f.source_confidence,
+                   f.summary, f.evidence_url, f.evidence_hash_sha256, f.source_citation, f.deleted_at
+            FROM case_findings f
+            LEFT JOIN case_subjects s ON f.subject_id = s.id
+            WHERE f.case_id = ? AND f.deleted_at IS NULL
+        """, (case_id,))
         rows = [dict(row) for row in cursor.fetchall()]
         return [_map_case_finding_row(r, include_details=False) for r in rows]
     except sqlite3.Error as e:
@@ -465,9 +674,10 @@ def get_deleted_case_findings() -> list[dict]:
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT f.*, c.case_name as case_name 
+            SELECT f.*, c.case_name as case_name, s.display_name AS subject_name
             FROM case_findings f 
             JOIN cases c ON f.case_id = c.id 
+            LEFT JOIN case_subjects s ON f.subject_id = s.id
             WHERE f.deleted_at IS NOT NULL
         """)
         return [dict(row) for row in cursor.fetchall()]
@@ -487,17 +697,18 @@ def add_case_finding(
     detailed_findings: str = '',
     evidence_url: str = '',
     evidence_hash_sha256: str = '',
-    source_citation: str = ''
+    source_citation: str = '',
+    subject_id: int | None = None,
 ):
     conn = get_connection()
     try:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO case_findings (
-                case_id, domain_category, title, risk_level, source_confidence, 
+                case_id, subject_id, domain_category, title, risk_level, source_confidence, 
                 summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (case_id, domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (case_id, subject_id, domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -516,17 +727,18 @@ def update_case_finding(
     detailed_findings: str,
     evidence_url: str,
     evidence_hash_sha256: str,
-    source_citation: str
+    source_citation: str,
+    subject_id: int | None = None,
 ):
     conn = get_connection()
     try:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE case_findings 
-            SET domain_category = ?, title = ?, risk_level = ?, source_confidence = ?, 
+            SET subject_id = ?, domain_category = ?, title = ?, risk_level = ?, source_confidence = ?, 
                 summary = ?, detailed_findings = ?, evidence_url = ?, evidence_hash_sha256 = ?, source_citation = ?
             WHERE id = ?
-        """, (domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation, finding_id))
+        """, (subject_id, domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation, finding_id))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:

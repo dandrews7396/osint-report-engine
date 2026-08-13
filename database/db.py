@@ -11,6 +11,13 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+
+def _ensure_column(cursor, table_name: str, column_name: str, column_definition: str):
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    existing_columns = {row[1] for row in cursor.fetchall()}
+    if column_name not in existing_columns:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
+
 def _clear_read_caches():
     st.cache_data.clear()
 
@@ -90,7 +97,22 @@ def init_db():
             )
         ''')
 
-        # 6. OSINT Risk Library Table
+        # 6. Case Subjects Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS case_subjects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id INTEGER NOT NULL,
+                subject_type TEXT NOT NULL,
+                relationship_to_case TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                subject_data_json TEXT NOT NULL DEFAULT '{}',
+                notes TEXT,
+                deleted_at TEXT,
+                FOREIGN KEY (case_id) REFERENCES cases (id) ON DELETE CASCADE
+            )
+        ''')
+
+        # 7. OSINT Risk Library Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS risk_library (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,11 +126,12 @@ def init_db():
             )
         ''')
 
-        # 7. Case Findings Table
+        # 8. Case Findings Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS case_findings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 case_id INTEGER NOT NULL,
+                subject_id INTEGER,
                 domain_category TEXT NOT NULL,
                 title TEXT NOT NULL,
                 risk_level TEXT NOT NULL,
@@ -123,7 +146,11 @@ def init_db():
             )
         ''')
 
-        # 8. Login Attempts Table
+        _ensure_column(cursor, "case_findings", "subject_id", "INTEGER")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_case_subjects_case_id ON case_subjects (case_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_case_findings_subject_id ON case_findings (subject_id)")
+
+        # 9. Login Attempts Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS login_attempts (
                 username TEXT PRIMARY KEY,

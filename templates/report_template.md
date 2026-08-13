@@ -36,6 +36,37 @@
 
 ---
 
+## Case Subjects
+
+{% if subjects %}
+{% for subject in subjects %}
+### {{ subject.display_name }}{% if subject.subject_type %} ({{ subject.subject_type }}){% endif %}
+
+**Relationship to Case:** {{ subject.relationship_to_case }}
+
+{% if subject.notes %}
+**Notes:** {{ subject.notes }}
+
+{% endif %}
+{% if subject.summary_lines %}
+{% for label, value in subject.summary_lines %}
+- **{{ label }}:** {{ value }}
+{% endfor %}
+{% endif %}
+{% if subject.findings %}
+**Linked Findings:**
+{% for finding in subject.findings %}
+- {{ finding.title }}{% if finding.risk_level %} ({{ finding.risk_level }}){% endif %}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% else %}
+No subjects recorded for this case.
+{% endif %}
+
+---
+
 ## Intelligence Findings Overview
 
 {{ case.findings_chart | safe }}

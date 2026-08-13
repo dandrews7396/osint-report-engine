@@ -56,7 +56,7 @@ def main():
             show_login()
         return
 
-    menu = ["Dashboard", "Manage Clients", "Manage Cases", "Case Findings", "Risk Library", "Generate Report", "Templates", "Settings", "Profile", "Admin: Users", "Logout"]
+    menu = ["Dashboard", "Manage Clients", "Manage Cases", "Manage Subjects", "Case Findings", "Risk Library", "Generate Report", "Templates", "Settings", "Profile", "Admin: Users", "Logout"]
     if "nav" not in st.session_state or st.session_state.nav not in menu:
         st.session_state.nav = "Dashboard"
 
@@ -78,6 +78,9 @@ def main():
     elif st.session_state.nav == "Manage Cases":
         from views.manage_cases import show_manage_cases
         show_manage_cases()
+    elif st.session_state.nav == "Manage Subjects":
+        from views.manage_subjects import show_manage_subjects
+        show_manage_subjects()
     elif st.session_state.nav == "Case Findings":
         from views.manage_findings import show_manage_findings
         show_manage_findings()

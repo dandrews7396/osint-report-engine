@@ -43,6 +43,11 @@ def show_manage_findings():
         case_id = case_options[selected_case_label]
         st.session_state.manage_findings_case_id = case_id
         active_case = next((c for c in cases if c['id'] == case_id), None)
+        subjects = db.get_case_subjects(case_id)
+        subject_options = {"No Subject Linked": None}
+        for subject in subjects:
+            subject_options[f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} — {subject['relationship_to_case']}"] = subject['id']
+        subject_option_labels = list(subject_options.keys())
 
         DOMAIN_CATEGORIES = [
             "Identity & PII",
@@ -73,6 +78,8 @@ def show_manage_findings():
                     f"[{f.get('risk_level', 'Unspecified')}] [{f.get('confidence_level', 'Unspecified')}] {f.get('title', 'Untitled')} ({f.get('category', 'General')})",
                     expanded=is_expanded,
                 ):
+                    if f.get('subject_name'):
+                        st.caption(f"Linked subject: {f['subject_name']}")
                     if is_expanded:
                         full_finding = db.get_case_finding(f['id']) or f
                         with st.form(f"edit_form_{f['id']}"):
@@ -87,6 +94,19 @@ def show_manage_findings():
 
                             conf_idx = CONFIDENCE_LEVELS.index(full_finding.get('confidence_level', 'High Confidence')) if full_finding.get('confidence_level') in CONFIDENCE_LEVELS else 0
                             e_conf = col_conf.selectbox("Source Confidence", CONFIDENCE_LEVELS, index=conf_idx)
+
+                            subject_index = 0
+                            if full_finding.get('subject_id') in subject_options.values():
+                                for i, label in enumerate(subject_option_labels):
+                                    if subject_options[label] == full_finding.get('subject_id'):
+                                        subject_index = i
+                                        break
+                            e_subject_label = st.selectbox(
+                                "Linked Subject (optional)",
+                                subject_option_labels,
+                                index=subject_index,
+                            )
+                            e_subject_id = subject_options[e_subject_label]
 
                             e_summary = st.text_area("Executive Summary", value=full_finding.get('summary', '') or '', height=100)
 
@@ -119,7 +139,8 @@ def show_manage_findings():
                                     processed_details,
                                     e_url,
                                     e_hash,
-                                    e_citation
+                                    e_citation,
+                                    subject_id=e_subject_id
                                 )
                                 st.session_state.edit_finding_id = None
                                 st.success("Finding updated!")
@@ -156,11 +177,14 @@ def show_manage_findings():
                     with st.form("import_from_risk_lib"):
                         lib_options = {f"[{v['default_risk_level']}] {v['title']} ({v.get('category', 'General')})": v for v in risk_lib}
                         selected_vector_name = st.selectbox("Select Threat Vector", list(lib_options.keys()))
+                        imported_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
+                        imported_subject_id = subject_options[imported_subject_label]
 
                         if st.form_submit_button("Import to Case") and selected_vector_name:
                             selected_v = lib_options[selected_vector_name]
                             db.add_case_finding(
                                 case_id=case_id,
+                                subject_id=imported_subject_id,
                                 domain_category=selected_v.get('category', 'Custom Category'),
                                 title=selected_v['title'],
                                 risk_level=selected_v['default_risk_level'],
@@ -189,6 +213,8 @@ def show_manage_findings():
                 mf_conf = col_m3.selectbox("Source Confidence", CONFIDENCE_LEVELS)
 
                 mf_summary = st.text_area("Executive Summary", placeholder="Brief high-level summary of the intelligence item...")
+                mf_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
+                mf_subject_id = subject_options[mf_subject_label]
 
                 st.markdown("**Detailed Findings & Narrative**")
                 st.caption("You can paste images directly into this field; processing happens when you add the finding.")
@@ -211,6 +237,7 @@ def show_manage_findings():
                     processed_mf_details = process_base64_images(sanitize_rich_html(mf_details), active_case['client_id'], case_id)
                     db.add_case_finding(
                         case_id=case_id,
+                        subject_id=mf_subject_id,
                         domain_category=mf_category,
                         title=mf_title,
                         risk_level=mf_risk,

@@ -16,9 +16,10 @@ def restore_files_dialog():
 
     del_clients = db.get_deleted_clients()
     del_cases = db.get_deleted_cases()
+    del_subjects = db.get_deleted_case_subjects()
     del_findings = db.get_deleted_case_findings()
 
-    if not del_clients and not del_cases and not del_findings:
+    if not del_clients and not del_cases and not del_subjects and not del_findings:
         st.info("The recycle bin is empty.")
         return
 
@@ -46,11 +47,24 @@ def restore_files_dialog():
                 db.hard_delete_case(c["id"])
                 st.rerun()
 
+    if del_subjects:
+        st.markdown("### Deleted Case Subjects")
+        for s in del_subjects:
+            col1, col2, col3 = st.columns([2, 1, 1])
+            col1.write(f"{s['display_name']} ({s.get('case_name', 'Unknown')})")
+            if col2.button("Restore", key=f"rs_{s['id']}"):
+                db.restore_case_subject(s["id"])
+                st.rerun()
+            if col3.button("Permanently Delete", key=f"hds_{s['id']}", type="primary"):
+                db.hard_delete_case_subject(s["id"])
+                st.rerun()
+
     if del_findings:
         st.markdown("### Deleted Intelligence Findings")
         for f in del_findings:
             col1, col2, col3 = st.columns([2, 1, 1])
-            col1.write(f"{f['title']} ({f.get('case_name', 'Unknown')})")
+            subject_suffix = f" — {f['subject_name']}" if f.get('subject_name') else ""
+            col1.write(f"{f['title']}{subject_suffix} ({f.get('case_name', 'Unknown')})")
             if col2.button("Restore", key=f"rf_{f['id']}"):
                 db.restore_case_finding(f["id"])
                 st.rerun()

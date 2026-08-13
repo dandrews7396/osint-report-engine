@@ -11,6 +11,7 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from jinja2.sandbox import SandboxedEnvironment
 from weasyprint import HTML
+from database import operations as db
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,15 @@ def generate_report(case, client, firm, findings, output_path):
         # Sort findings strictly by risk_level primary
         findings.sort(key=lambda x: risk_rank.get(x.get('risk_level', 'Informational'), 99))
 
+        subjects = db.get_case_subjects(case['id'])
+        findings_by_subject = {}
+        for finding in findings:
+            subject_id = finding.get('subject_id')
+            if subject_id:
+                findings_by_subject.setdefault(subject_id, []).append(finding)
+        for subject in subjects:
+            subject['findings'] = findings_by_subject.get(subject['id'], [])
+
         risk_counts = { 'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0 }
         
         for finding in findings:
@@ -82,9 +92,10 @@ def generate_report(case, client, firm, findings, output_path):
         table_html += '<table style="width: 100%; border-collapse: collapse; border: 1px solid #333;">\n'
         table_html += '  <thead>\n'
         table_html += '    <tr>\n'
-        table_html += '      <th style="border: 1px solid #333; background-color: #555; color: white; padding: 10px; font-weight: bold; width: 40%; text-align: center;">Intelligence Finding / Subject</th>\n'
-        table_html += '      <th style="border: 1px solid #333; background-color: #555; color: white; padding: 10px; font-weight: bold; width: 20%; text-align: center;">Risk Rating</th>\n'
-        table_html += '      <th style="border: 1px solid #333; background-color: #555; color: white; padding: 10px; font-weight: bold; width: 40%; text-align: center;">Category / Target Scope</th>\n'
+        table_html += '      <th style="border: 1px solid #333; background-color: #555; color: white; padding: 10px; font-weight: bold; width: 28%; text-align: center;">Intelligence Finding</th>\n'
+        table_html += '      <th style="border: 1px solid #333; background-color: #555; color: white; padding: 10px; font-weight: bold; width: 16%; text-align: center;">Risk Rating</th>\n'
+        table_html += '      <th style="border: 1px solid #333; background-color: #555; color: white; padding: 10px; font-weight: bold; width: 30%; text-align: center;">Category / Target Scope</th>\n'
+        table_html += '      <th style="border: 1px solid #333; background-color: #555; color: white; padding: 10px; font-weight: bold; width: 26%; text-align: center;">Linked Subject</th>\n'
         table_html += '    </tr>\n'
         table_html += '  </thead>\n'
         table_html += '  <tbody>\n'
@@ -116,11 +127,13 @@ def generate_report(case, client, firm, findings, output_path):
                 
             title_slug = finding['anchor']
             title_html = f'<a href="#{title_slug}" style="color: #6b46c1; text-decoration: underline;">{finding["title"]}</a>'
+            subject_html = finding.get('subject_name') or 'Unassigned'
             
             table_html += f'    <tr>\n'
             table_html += f'      <td style="border: 1px solid #333; padding: 10px; text-align: center; background-color: white;">{title_html}</td>\n'
             table_html += f'      <td style="border: 1px solid #333; padding: 10px; background-color: {bg_color}; color: white; font-weight: bold; text-align: center;">{risk}</td>\n'
             table_html += f'      <td style="border: 1px solid #333; padding: 10px; text-align: center; color: #fff; background-color: #2c3e50;">{target_html}</td>\n'
+            table_html += f'      <td style="border: 1px solid #333; padding: 10px; text-align: center; background-color: #1f2933; color: #fff;">{subject_html}</td>\n'
             table_html += f'    </tr>\n'
             
         table_html += '  </tbody>\n</table>\n</div>'
@@ -184,6 +197,7 @@ def generate_report(case, client, firm, findings, output_path):
 
 {% if finding.target %}**Target / Subject:** {{ finding.target }}<br>{% endif %}
 {% if finding.location %}**Location / Source URL:** {{ finding.location }}<br>{% endif %}
+{% if finding.subject_name %}**Linked Subject:** {{ finding.subject_name }}<br>{% endif %}
 
 <div style="page-break-after: avoid; font-weight: bold; margin-bottom: 10px; margin-top: 20px;">Finding Description & Analysis:</div>
 </div>
@@ -211,7 +225,6 @@ def generate_report(case, client, firm, findings, output_path):
 {% endif %}
 {% endfor %}
 {% endif %}
-
 {% endfor %}
 """
         md_content = md_content.replace('{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}', detailed_findings_md)
@@ -232,7 +245,6 @@ def generate_report(case, client, firm, findings, output_path):
             'title': ''
         }
         
-        from database import operations as db
         for inv in db.get_investigators():
             if inv['name'] == investigator['name']:
                 investigator['description'] = inv.get('bio', '')
@@ -261,6 +273,7 @@ def generate_report(case, client, firm, findings, output_path):
             firm=firm_dict,
             investigator=investigator,
             findings=findings,
+            subjects=subjects,
             findings_table=table_html
         )
         
@@ -297,7 +310,6 @@ def generate_attestation(case, client, firm, output_path, custom_bio=None):
 
         firm_dict = {f.get('key'): f.get('value') for f in firm} if isinstance(firm, list) else firm
 
-        from database import operations as db
         investigator = {
             'name': case.get('investigator_name', ''),
             'description': case.get('investigator_description', ''),
