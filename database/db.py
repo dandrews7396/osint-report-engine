@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import time
+import streamlit as st
 
 DB_PATH = 'data/kairos_osint.db'
 
@@ -9,6 +10,9 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
+
+def _clear_read_caches():
+    st.cache_data.clear()
 
 def init_db():
     conn = get_connection()
@@ -136,6 +140,7 @@ def init_db():
         conn.close()
 
 # User Management Functions with Defensive Error Handling
+@st.cache_data(show_spinner=False)
 def get_user_count():
     conn = get_connection()
     try:
@@ -154,6 +159,7 @@ def add_user(username, password_hash):
         cursor = conn.cursor()
         cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, password_hash))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.IntegrityError:
         conn.rollback()
         raise ValueError("Username already exists")
@@ -163,6 +169,7 @@ def add_user(username, password_hash):
     finally:
         conn.close()
 
+@st.cache_data(show_spinner=False)
 def get_user(username):
     conn = get_connection()
     try:
@@ -182,6 +189,7 @@ def update_user_mfa(username, mfa_secret, mfa_enabled):
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET mfa_secret = ?, mfa_enabled = ? WHERE username = ?", (mfa_secret, mfa_enabled, username))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] update_user_mfa: {e}")
@@ -194,6 +202,7 @@ def update_user_password(username, new_password_hash):
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (new_password_hash, username))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] update_user_password: {e}")
@@ -212,6 +221,7 @@ def record_failed_login(username):
                 last_attempt = ?
         ''', (username, time.time(), time.time()))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] record_failed_login: {e}")
@@ -224,12 +234,14 @@ def reset_failed_logins(username):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] reset_failed_logins: {e}")
     finally:
         conn.close()
 
+@st.cache_data(show_spinner=False)
 def get_failed_logins(username):
     conn = get_connection()
     try:

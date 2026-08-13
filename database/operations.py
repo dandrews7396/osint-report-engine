@@ -1,5 +1,9 @@
 import sqlite3
+import streamlit as st
 from database.db import get_connection
+
+def _clear_read_caches():
+    st.cache_data.clear()
 
 # --- System ---
 def cleanup_deleted_items():
@@ -10,6 +14,7 @@ def cleanup_deleted_items():
         cursor.execute("DELETE FROM cases WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
         cursor.execute("DELETE FROM clients WHERE deleted_at IS NOT NULL AND datetime(deleted_at) <= datetime('now', '-30 days')")
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] cleanup_deleted_items: {e}")
@@ -17,6 +22,7 @@ def cleanup_deleted_items():
         conn.close()
 
 # --- Settings ---
+@st.cache_data(show_spinner=False)
 def get_settings() -> dict:
     conn = get_connection()
     try:
@@ -35,6 +41,7 @@ def update_setting(key: str, value: str):
         cursor = conn.cursor()
         cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] update_setting: {e}")
@@ -42,6 +49,7 @@ def update_setting(key: str, value: str):
         conn.close()
 
 # --- Clients ---
+@st.cache_data(show_spinner=False)
 def get_clients() -> list[dict]:
     conn = get_connection()
     try:
@@ -54,6 +62,7 @@ def get_clients() -> list[dict]:
     finally:
         conn.close()
 
+@st.cache_data(show_spinner=False)
 def get_deleted_clients() -> list[dict]:
     conn = get_connection()
     try:
@@ -75,6 +84,7 @@ def add_client(name: str, client_type: str = 'Law Firm', contact_email: str = ''
             VALUES (?, ?, ?, ?)
         """, (name, client_type, contact_email, description))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] add_client: {e}")
@@ -93,6 +103,7 @@ def delete_client(client_id: int):
             AND deleted_at IS NULL
         """, (client_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] delete_client: {e}")
@@ -105,6 +116,7 @@ def restore_client(client_id: int):
         cursor = conn.cursor()
         cursor.execute("UPDATE clients SET deleted_at = NULL WHERE id = ?", (client_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] restore_client: {e}")
@@ -117,6 +129,7 @@ def hard_delete_client(client_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] hard_delete_client: {e}")
@@ -124,6 +137,7 @@ def hard_delete_client(client_id: int):
         conn.close()
 
 # --- Cases (Formerly Projects) ---
+@st.cache_data(show_spinner=False)
 def get_cases() -> list[dict]:
     conn = get_connection()
     try:
@@ -147,6 +161,7 @@ def get_cases() -> list[dict]:
     finally:
         conn.close()
 
+@st.cache_data(show_spinner=False)
 def get_deleted_cases() -> list[dict]:
     conn = get_connection()
     try:
@@ -198,6 +213,7 @@ def add_case(
         ))
         new_id = cursor.lastrowid
         conn.commit()
+        _clear_read_caches()
         return new_id
     except sqlite3.Error as e:
         conn.rollback()
@@ -239,6 +255,7 @@ def update_case(
             executive_assessment, key_findings_summary, tools_and_sources_used, case_id
         ))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] update_case: {e}")
@@ -252,6 +269,7 @@ def delete_case(case_id: int):
         cursor.execute("UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (case_id,))
         cursor.execute("UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP WHERE case_id = ? AND deleted_at IS NULL", (case_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] delete_case: {e}")
@@ -264,6 +282,7 @@ def restore_case(case_id: int):
         cursor = conn.cursor()
         cursor.execute("UPDATE cases SET deleted_at = NULL WHERE id = ?", (case_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] restore_case: {e}")
@@ -276,6 +295,7 @@ def hard_delete_case(case_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM cases WHERE id = ?", (case_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] hard_delete_case: {e}")
@@ -283,6 +303,7 @@ def hard_delete_case(case_id: int):
         conn.close()
 
 # --- Risk Library (Formerly Vulnerability Library) ---
+@st.cache_data(show_spinner=False)
 def get_risk_library() -> list[dict]:
     conn = get_connection()
     try:
@@ -312,6 +333,7 @@ def add_to_risk_library(
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (category, title, default_risk_level, description, investigative_guidance, source_confidence, refs))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] add_to_risk_library: {e}")
@@ -324,6 +346,7 @@ def delete_from_risk_library(risk_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM risk_library WHERE id = ?", (risk_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] delete_from_risk_library: {e}")
@@ -349,6 +372,7 @@ def update_in_risk_library(
             WHERE id = ?
         """, (category, title, default_risk_level, description, investigative_guidance, source_confidence, refs, risk_id))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] update_in_risk_library: {e}")
@@ -356,6 +380,7 @@ def update_in_risk_library(
         conn.close()
 
 # --- Case Findings (Formerly Project Findings) ---
+@st.cache_data(show_spinner=False)
 def get_case_findings(case_id: int) -> list[dict]:
     conn = get_connection()
     try:
@@ -387,6 +412,7 @@ def get_case_findings(case_id: int) -> list[dict]:
     finally:
         conn.close()
 
+@st.cache_data(show_spinner=False)
 def get_deleted_case_findings() -> list[dict]:
     conn = get_connection()
     try:
@@ -426,6 +452,7 @@ def add_case_finding(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (case_id, domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] add_case_finding: {e}")
@@ -454,6 +481,7 @@ def update_case_finding(
             WHERE id = ?
         """, (domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation, finding_id))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] update_case_finding: {e}")
@@ -466,6 +494,7 @@ def delete_case_finding(finding_id: int):
         cursor = conn.cursor()
         cursor.execute("UPDATE case_findings SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (finding_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] delete_case_finding: {e}")
@@ -478,6 +507,7 @@ def restore_case_finding(finding_id: int):
         cursor = conn.cursor()
         cursor.execute("UPDATE case_findings SET deleted_at = NULL WHERE id = ?", (finding_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] restore_case_finding: {e}")
@@ -490,6 +520,7 @@ def hard_delete_case_finding(finding_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM case_findings WHERE id = ?", (finding_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] hard_delete_case_finding: {e}")
@@ -497,6 +528,7 @@ def hard_delete_case_finding(finding_id: int):
         conn.close()
 
 # --- Investigators (Formerly Testers) ---
+@st.cache_data(show_spinner=False)
 def get_investigators() -> list[dict]:
     conn = get_connection()
     try:
@@ -515,6 +547,7 @@ def add_investigator(name: str, title: str, credentials: str, bio: str):
         cursor = conn.cursor()
         cursor.execute("INSERT INTO investigators (name, title, credentials, bio) VALUES (?, ?, ?, ?)", (name, title, credentials, bio))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] add_investigator: {e}")
@@ -527,6 +560,7 @@ def delete_investigator(investigator_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM investigators WHERE id = ?", (investigator_id,))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] delete_investigator: {e}")
@@ -539,12 +573,14 @@ def update_investigator(investigator_id: int, name: str, title: str, credentials
         cursor = conn.cursor()
         cursor.execute("UPDATE investigators SET name = ?, title = ?, credentials = ?, bio = ? WHERE id = ?", (name, title, credentials, bio, investigator_id))
         conn.commit()
+        _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
         print(f"[DB ERROR] update_investigator: {e}")
     finally:
         conn.close()
 
+@st.cache_data(show_spinner=False)
 def get_client_with_most_recent_finding():
     conn = get_connection()
     try:
