@@ -10,9 +10,6 @@ except AttributeError:
         return func
 
 def show_risk_library():
-    st.title("OSINT Risk & Threat Library")
-    st.write("Manage standardized threat vectors, risk templates, and investigative guidance. These pre-configured templates can be searched, managed, and imported directly into active cases.")
-    
     DOMAIN_CATEGORIES = [
         "Identity & PII",
         "Corporate Governance & Ownership",
@@ -29,6 +26,9 @@ def show_risk_library():
 
     @fragment
     def render_risk_entries():
+        st.title("OSINT Risk & Threat Library")
+        st.write("Manage standardized threat vectors, risk templates, and investigative guidance. These pre-configured templates can be searched, managed, and imported directly into active cases.")
+
         st.subheader("Risk Library Entries")
 
         col_search, col_cat_filter = st.columns([2, 1])

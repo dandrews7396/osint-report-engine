@@ -4,6 +4,7 @@ import re
 import base64
 
 import nh3
+import streamlit as st
 
 RICH_TEXT_TAGS = {
     'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'del', 'div', 'em',
@@ -38,6 +39,7 @@ def sanitize_rich_html(html_content):
     )
 
 
+@st.cache_data(show_spinner=False)
 def get_image_base64(path):
     with open(path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode()
