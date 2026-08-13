@@ -9,12 +9,14 @@ except AttributeError:
 
 def show_templates():
     project_types = [
-        "Web Application Penetration Test",
-        "Internal Network Penetration Test",
-        "External Network Penetration Test",
-        "AI/LLM Penetration Test",
-        "Cloud Penetration Test",
-        "OSINT Research"
+        "Enhanced Due Diligence",
+        "Executive Threat Assessment",
+        "Asset Tracing & Recovery",
+        "Brand Protection & Anti-Counterfeiting",
+        "Insider Threat Investigation",
+        "Fraud & Financial Crime Investigation",
+        "Person Profile",
+        "Custom OSINT Investigation"
     ]
     
     template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')

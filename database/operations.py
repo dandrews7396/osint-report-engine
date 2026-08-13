@@ -524,7 +524,7 @@ def get_risk_library() -> list[dict]:
     finally:
         conn.close()
 
-def add_to_risk_library(
+def add_risk_library_item(
     category: str,
     title: str,
     default_risk_level: str,
@@ -544,11 +544,32 @@ def add_to_risk_library(
         _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
-        print(f"[DB ERROR] add_to_risk_library: {e}")
+        print(f"[DB ERROR] add_risk_library_item: {e}")
     finally:
         conn.close()
 
-def delete_from_risk_library(risk_id: int):
+
+def add_to_risk_library(
+    category: str,
+    title: str,
+    default_risk_level: str,
+    description: str = '',
+    investigative_guidance: str = '',
+    source_confidence: str = 'High Confidence',
+    refs: str = ''
+):
+    return add_risk_library_item(
+        category=category,
+        title=title,
+        default_risk_level=default_risk_level,
+        description=description,
+        investigative_guidance=investigative_guidance,
+        source_confidence=source_confidence,
+        refs=refs,
+    )
+
+
+def delete_risk_library_item(risk_id: int):
     conn = get_connection()
     try:
         cursor = conn.cursor()
@@ -557,11 +578,16 @@ def delete_from_risk_library(risk_id: int):
         _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
-        print(f"[DB ERROR] delete_from_risk_library: {e}")
+        print(f"[DB ERROR] delete_risk_library_item: {e}")
     finally:
         conn.close()
 
-def update_in_risk_library(
+
+def delete_from_risk_library(risk_id: int):
+    return delete_risk_library_item(risk_id)
+
+
+def update_risk_library_item(
     risk_id: int,
     category: str,
     title: str,
@@ -583,9 +609,31 @@ def update_in_risk_library(
         _clear_read_caches()
     except sqlite3.Error as e:
         conn.rollback()
-        print(f"[DB ERROR] update_in_risk_library: {e}")
+        print(f"[DB ERROR] update_risk_library_item: {e}")
     finally:
         conn.close()
+
+
+def update_in_risk_library(
+    risk_id: int,
+    category: str,
+    title: str,
+    default_risk_level: str,
+    description: str,
+    investigative_guidance: str,
+    source_confidence: str,
+    refs: str
+):
+    return update_risk_library_item(
+        risk_id=risk_id,
+        category=category,
+        title=title,
+        default_risk_level=default_risk_level,
+        description=description,
+        investigative_guidance=investigative_guidance,
+        source_confidence=source_confidence,
+        refs=refs,
+    )
 
 # --- Case Findings (Formerly Project Findings) ---
 def _map_case_finding_row(r: dict, include_details: bool = True) -> dict:
@@ -607,7 +655,7 @@ def _map_case_finding_row(r: dict, include_details: bool = True) -> dict:
     }
     if include_details:
         mapped['description'] = r.get('detailed_findings') or r.get('summary') or ''
-        mapped['evidence'] = r.get('detailed_findings') or r.get('evidence_url') or ''
+        mapped['evidence'] = r.get('evidence_url') or r.get('source_citation') or ''
     return mapped
 
 @st.cache_data(show_spinner=False)

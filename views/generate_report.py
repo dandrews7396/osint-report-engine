@@ -99,6 +99,18 @@ def show_generate_report():
         def render_generate_actions():
            col_rep, col_att = st.columns(2)
 
+           settings = db.get_settings()
+           default_graphs = str(settings.get('default_report_include_risk_graphs', 'true')).lower() in {'1', 'true', 'yes', 'y'}
+           if 'generate_report_include_risk_graphs' not in st.session_state:
+               st.session_state.generate_report_include_risk_graphs = default_graphs
+
+           with st.expander("Report Configuration"):
+               st.checkbox(
+                   "Include risk graph summary in report",
+                   value=st.session_state.generate_report_include_risk_graphs,
+                   key="generate_report_include_risk_graphs",
+               )
+
            with col_rep:
                if st.button("Generate OSINT PDF Report", use_container_width=True, type="primary"):
                    if not findings:
@@ -109,7 +121,14 @@ def show_generate_report():
                            client = next((c for c in clients if c['id'] == case['client_id']), None)
                            firm = db.get_settings()
                            try:
-                               generate_report(case, client, firm, findings, out_filename)
+                               generate_report(
+                                   case,
+                                   client,
+                                   firm,
+                                   findings,
+                                   out_filename,
+                                   include_risk_graphs=st.session_state.generate_report_include_risk_graphs,
+                               )
                                st.success("Intelligence Report generated successfully!")
 
                                missing = []

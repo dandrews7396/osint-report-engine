@@ -29,7 +29,17 @@ def format_date_with_suffix(date_str):
     except Exception:
         return date_str
 
-def generate_report(case, client, firm, findings, output_path):
+
+def _normalize_report_text(value):
+    if not value:
+        return ''
+    text = str(value).replace('&nbsp;', ' ')
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip().lower()
+
+
+def generate_report(case, client, firm, findings, output_path, include_risk_graphs: bool = True):
     """
     Generates an OSINT Intelligence PDF report using Jinja2 + WeasyPrint.
     Dynamically renders case findings, risk distributions, and intelligence evidence.
@@ -37,11 +47,12 @@ def generate_report(case, client, firm, findings, output_path):
     try:
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         
-        safe_type = case.get('case_type', '').replace(' ', '_').replace('/', '_')
+        case_type = case.get('case_type', '')
+        safe_type = case_type.replace(' ', '_').replace('/', '_')
         custom_template_path = os.path.join(template_dir, f'report_template_{safe_type}.md')
         default_template_path = os.path.join(template_dir, 'report_template.md')
-        
         md_template_path = custom_template_path if os.path.exists(custom_template_path) else default_template_path
+        logger.info("Report template selection: case_type=%r, safe_type=%r, custom_exists=%s, chosen=%s", case_type, safe_type, os.path.exists(custom_template_path), md_template_path)
         
         with open(md_template_path, 'r', encoding='utf-8') as f:
             md_content = f.read()
@@ -81,11 +92,19 @@ def generate_report(case, client, firm, findings, output_path):
             
             finding['anchor'] = re.sub(r'[^a-z0-9]+', '-', (finding.get('title') or '').lower()).strip('-')
             
-            evidence_raw = finding.get('evidence', '')
-            finding['evidence_html'] = markdown.markdown(
-                evidence_raw, 
-                extensions=['fenced_code', 'tables', 'md_in_html', 'toc', 'attr_list']
+            description_raw = finding.get('description', '') or ''
+            evidence_raw = finding.get('evidence', '') or ''
+            normalized_description = _normalize_report_text(description_raw)
+            normalized_evidence = _normalize_report_text(evidence_raw)
+            finding['include_evidence_section'] = bool(
+                evidence_raw and not (
+                    normalized_description and normalized_evidence and normalized_description == normalized_evidence
+                )
             )
+            finding['evidence_html'] = markdown.markdown(
+                evidence_raw,
+                extensions=['fenced_code', 'tables', 'md_in_html', 'toc', 'attr_list']
+            ) if finding['include_evidence_section'] else ''
 
         # Summary Table Construction
         table_html = '<div style="page-break-inside: avoid; margin-bottom: 20px;">\n'
@@ -141,44 +160,47 @@ def generate_report(case, client, firm, findings, output_path):
         md_content = md_content.replace('{{ findings.table }}', '{{ findings_table }}')
         
         # --- Risk Level Chart Generation ---
-        labels = ['Critical', 'High', 'Medium', 'Low', 'Informational']
-        counts = [risk_counts.get(risk, 0) for risk in labels]
-        
-        max_count = max(counts) if counts else 0
-        if max_count <= 7:
-            y_max = 7
-            y_step = 1
+        if include_risk_graphs:
+            labels = ['Critical', 'High', 'Medium', 'Low', 'Informational']
+            counts = [risk_counts.get(risk, 0) for risk in labels]
+            
+            max_count = max(counts) if counts else 0
+            if max_count <= 7:
+                y_max = 7
+                y_step = 1
+            else:
+                y_max = max_count + (5 - (max_count % 5)) if max_count % 5 != 0 else max_count
+                y_step = max(1, y_max // 5)
+                
+            fig, ax = plt.subplots(figsize=(7, 4))
+            colors = ['#c00000', '#ff0000', '#ff9933', '#ffcc00', '#99cc00']
+            bars = ax.bar(labels, counts, color=colors, width=0.5)
+            
+            ax.set_title('Intelligence Findings by Risk Rating', fontsize=16, fontweight='bold', pad=20)
+            ax.set_ylim(0, y_max)
+            ax.set_yticks(list(range(0, y_max + 1, y_step)))
+            
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['bottom'].set_color('#333')
+            ax.spines['left'].set_color('#333')
+            
+            for bar in bars:
+                yval = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2.0, yval + (y_max * 0.02), int(yval), ha='center', va='bottom', fontweight='bold', fontsize=12)
+                
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            chart_filename = f"chart_{uuid.uuid4().hex}.png"
+            chart_path = os.path.join(os.path.dirname(output_path), chart_filename)
+            
+            plt.tight_layout()
+            plt.savefig(chart_path, dpi=150)
+            plt.close(fig)
+            
+            chart_html = f'<div style="text-align: center; margin: 40px 0; page-break-inside: avoid;"><img src="file://{os.path.abspath(chart_path)}" style="max-width: 600px; width: 100%;"></div>'
+            case['findings_chart'] = chart_html
         else:
-            y_max = max_count + (5 - (max_count % 5)) if max_count % 5 != 0 else max_count
-            y_step = max(1, y_max // 5)
-            
-        fig, ax = plt.subplots(figsize=(7, 4))
-        colors = ['#c00000', '#ff0000', '#ff9933', '#ffcc00', '#99cc00']
-        bars = ax.bar(labels, counts, color=colors, width=0.5)
-        
-        ax.set_title('Intelligence Findings by Risk Rating', fontsize=16, fontweight='bold', pad=20)
-        ax.set_ylim(0, y_max)
-        ax.set_yticks(list(range(0, y_max + 1, y_step)))
-        
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color('#333')
-        ax.spines['left'].set_color('#333')
-        
-        for bar in bars:
-            yval = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2.0, yval + (y_max * 0.02), int(yval), ha='center', va='bottom', fontweight='bold', fontsize=12)
-            
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        chart_filename = f"chart_{uuid.uuid4().hex}.png"
-        chart_path = os.path.join(os.path.dirname(output_path), chart_filename)
-        
-        plt.tight_layout()
-        plt.savefig(chart_path, dpi=150)
-        plt.close(fig)
-        
-        chart_html = f'<div style="text-align: center; margin: 40px 0; page-break-inside: avoid;"><img src="file://{os.path.abspath(chart_path)}" style="max-width: 600px; width: 100%;"></div>'
-        case['findings_chart'] = chart_html
+            case['findings_chart'] = ''
         
         detailed_findings_md = """
 {% for finding in findings %}
@@ -210,7 +232,7 @@ def generate_report(case, client, firm, findings, output_path):
 {{ finding.remediation }}
 {% endif %}
 
-{% if finding.evidence_html and finding.evidence_html.strip() %}
+{% if finding.include_evidence_section and finding.evidence_html and finding.evidence_html.strip() %}
 <div style="page-break-after: avoid; font-weight: bold; margin-bottom: 10px; margin-top: 20px;">Intelligence Evidence & Collected Data:</div>
 
 <div class="markdown-content">{{ finding.evidence_html | safe }}</div>

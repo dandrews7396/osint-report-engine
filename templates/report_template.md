@@ -26,6 +26,23 @@
 
 ---
 
+## Investigator Profile
+
+**Lead Investigator:** {{ investigator.name }}  
+{% if investigator.title %}**Title / Designation:** {{ investigator.title }}<br>{% endif %}
+
+{{ investigator.description }}
+
+---
+## Methodology & Intelligence Tools
+
+The following specialized open-source intelligence platforms, collection frameworks, and verification tools were utilized during this assessment:
+
+{% if case.tools_used_table %}{{ case.tools_used_table | safe }}{% else %}{{ case.tools_used | safe }}{% endif %}
+
+---
+<div style="page-break-before: always;"></div>
+
 ## Scope & Legitimate Interest
 
 **Target Scope:**  
@@ -43,20 +60,20 @@
 ### {{ subject.display_name }}{% if subject.subject_type %} ({{ subject.subject_type }}){% endif %}
 
 **Relationship to Case:** {{ subject.relationship_to_case }}
-
-{% if subject.notes %}
-**Notes:** {{ subject.notes }}
-
-{% endif %}
+**Details:**
 {% if subject.summary_lines %}
 {% for label, value in subject.summary_lines %}
 - **{{ label }}:** {{ value }}
 {% endfor %}
 {% endif %}
 {% if subject.findings %}
+{% if subject.notes %}
+**Notes:** {{ subject.notes }}
+
+{% endif %}
 **Linked Findings:**
 {% for finding in subject.findings %}
-- {{ finding.title }}{% if finding.risk_level %} ({{ finding.risk_level }}){% endif %}
+- {{ finding.title }}{% if finding.risk_level %} ({{ finding.risk_level }}){% endif %}{% if finding.confidence_level %} ({{ finding.confidence_level }}){% endif %}
 {% endfor %}
 {% endif %}
 
@@ -72,25 +89,6 @@ No subjects recorded for this case.
 {{ case.findings_chart | safe }}
 
 {% if case.findings_table %}{{ case.findings_table | safe }}{% else %}{{ findings_table | safe }}{% endif %}
-
----
-
-<div style="page-break-before: always;"></div>
-
-## Methodology & Intelligence Tools
-
-The following specialized open-source intelligence platforms, collection frameworks, and verification tools were utilized during this assessment:
-
-{% if case.tools_used_table %}{{ case.tools_used_table | safe }}{% else %}{{ case.tools_used | safe }}{% endif %}
-
----
-
-## Investigator Profile
-
-**Lead Investigator:** {{ investigator.name }}  
-{% if investigator.title %}**Title / Designation:** {{ investigator.title }}<br>{% endif %}
-
-{{ investigator.description }}
 
 ---
 

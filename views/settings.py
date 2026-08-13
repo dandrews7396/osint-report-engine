@@ -85,9 +85,14 @@ def show_settings():
             c_f1, c_f2 = st.columns(2)
             firm_name = c_f1.text_input("Firm Name", value=settings.get("firm_name", "Default Intelligence Firm"))
             firm_website = c_f2.text_input("Firm Website", value=settings.get("firm_website", ""))
+            risk_graph_default = st.checkbox(
+                "Include risk graph summary in generated reports by default",
+                value=str(settings.get("default_report_include_risk_graphs", "true")).lower() in {"1", "true", "yes", "y"},
+            )
             if st.form_submit_button("Save Firm Settings"):
                 db.update_setting("firm_name", firm_name)
                 db.update_setting("firm_website", firm_website)
+                db.update_setting("default_report_include_risk_graphs", str(risk_graph_default).lower())
                 st.success("Firm settings updated.")
                 st.rerun()
 

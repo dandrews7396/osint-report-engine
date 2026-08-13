@@ -50,6 +50,7 @@ def init_db():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('ico_registration_no', 'ZB123456')")
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('gdpr_lawful_basis', 'Article 6(1)(f) UK GDPR — Legitimate Interest for corporate risk mitigation and legal disputes.')")
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('executive_summary_template', 'This Enhanced Due Diligence report provides an objective risk assessment based on open-source intelligence...')")
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_report_include_risk_graphs', 'true')")
 
         # 3. Investigators Table
         cursor.execute('''
