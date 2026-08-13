@@ -85,6 +85,7 @@ def show_manage_subjects():
         subjects = db.get_case_subjects(case_id)
         st.subheader("Current Case Subjects")
         st.caption(f"{len(subjects)} subject(s) on this case")
+        st.caption("Internal notes are excluded from generated reports. Use the dedicated notes field only for case-only working notes.")
 
         if not subjects:
             st.info("No subjects added to this case yet.")
@@ -93,11 +94,6 @@ def show_manage_subjects():
                 is_expanded = st.session_state.get('edit_subject_id') == subject['id']
                 with st.expander(_subject_label(subject), expanded=is_expanded):
                     st.caption(f"Linked findings: {subject.get('finding_count', 0)}")
-                    if subject.get('summary_lines'):
-                        for label, value in subject["summary_lines"]:
-                            st.write(f"**{label}:** {value}")
-                    if subject.get('notes'):
-                        st.write(f"**Notes:** {subject['notes']}")
 
                     if is_expanded:
                         with st.form(f"edit_subject_{subject['id']}"):
@@ -121,8 +117,9 @@ def show_manage_subjects():
                             )
                             e_data = _render_subject_fields(subject['id'], e_type, subject.get('subject_data', {}), "edit_subject")
                             e_notes = st.text_area(
-                                "Notes",
+                                "Notes (these will not appear in a generated report)",
                                 value=subject.get('notes', ''),
+                                help="Internal-only notes for case management. They are not included in generated reports.",
                                 key=f"edit_subject_{subject['id']}_notes",
                             )
 
@@ -168,7 +165,11 @@ def show_manage_subjects():
                 key="new_subject_type",
             )
             new_data = _render_subject_fields("new", new_type, {}, "new_subject")
-            new_notes = st.text_area("Notes", key="new_subject_notes")
+            new_notes = st.text_area(
+                "Notes (these will not appear in a generated report)",
+                key="new_subject_notes",
+                help="Internal-only notes for case management. They are not included in generated reports.",
+            )
 
             if st.form_submit_button("Add Subject"):
                 cleaned_data = {k: (v or "").strip() for k, v in new_data.items()}

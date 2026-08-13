@@ -204,7 +204,7 @@ def show_manage_findings():
                 st.session_state.add_finding_key = 0
 
             st.subheader("Add Manual Intelligence Finding")
-            with st.form(f"add_manual_finding_{st.session_state.add_finding_key}"):
+            with st.form(f"add_manual_finding_{st.session_state.add_finding_key}", clear_on_submit=True):
                 mf_title = st.text_input("Finding Title", placeholder="e.g., Unsanctified Corporate Entity Registered in Offshore Jurisdiction")
 
                 col_m1, col_m2, col_m3 = st.columns(3)

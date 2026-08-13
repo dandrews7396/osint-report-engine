@@ -82,9 +82,28 @@
 
 ---
 
+## 5. Subject Details & Contact Information
+
+{% if subjects %}
+{% for subject in subjects %}
+### {{ subject.display_name }}{% if subject.subject_type %} ({{ subject.subject_type }}){% endif %}
+
+{% if subject.summary_lines %}
+{% for label, value in subject.summary_lines %}
+- **{{ label }}:** {{ value }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% else %}
+No subjects recorded for this case.
+{% endif %}
+
+---
+
 <div style="page-break-before: always;"></div>
 
-## 5. Methodology & Legal Compliance
+## 6. Methodology & Legal Compliance
 
 1. **Lawful Basis:** Data was processed under **Legitimate Interest** (Art. 6(1)(f) UK GDPR) for fraud detection, background verification, or asset protection.
 2. **Chain of Custody:** Web page captures and social media snapshots are archived with cryptographic hashing.

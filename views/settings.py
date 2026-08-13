@@ -119,7 +119,7 @@ def show_settings():
             st.info("No investigators added yet.")
 
         with st.expander("Add New Investigator"):
-            with st.form("add_investigator"):
+            with st.form("add_investigator", clear_on_submit=True):
                 col_t1, col_t2 = st.columns(2)
                 inv_name = col_t1.text_input("Name")
                 inv_title = col_t2.text_input("Title")

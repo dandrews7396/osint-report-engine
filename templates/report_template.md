@@ -67,10 +67,6 @@ The following specialized open-source intelligence platforms, collection framewo
 {% endfor %}
 {% endif %}
 {% if subject.findings %}
-{% if subject.notes %}
-**Notes:** {{ subject.notes }}
-
-{% endif %}
 **Linked Findings:**
 {% for finding in subject.findings %}
 - {{ finding.title }}{% if finding.risk_level %} ({{ finding.risk_level }}){% endif %}{% if finding.confidence_level %} ({{ finding.confidence_level }}){% endif %}

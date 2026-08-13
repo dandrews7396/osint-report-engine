@@ -9,7 +9,7 @@ def show_admin_users():
         st.title("User Management")
         st.write("Create additional accounts for your team.")
 
-        with st.form("add_user_form"):
+        with st.form("add_user_form", clear_on_submit=True):
             admin_pw = st.text_input("Your Current Password (Admin)", type="password")
             st.divider()
             username = st.text_input("New Username")

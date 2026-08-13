@@ -21,11 +21,12 @@ SUBJECT_TYPE_SCHEMAS = {
         "fields": [
             {"key": "full_name", "label": "Full Name", "kind": "text", "placeholder": "e.g., Jane Alexandra Doe"},
             {"key": "aliases", "label": "Aliases / Known As", "kind": "text", "placeholder": "Comma-separated aliases"},
+            {"key": "phone_number", "label": "Phone Number", "kind": "text", "placeholder": "+44 ... or mobile number"},
             {"key": "date_of_birth", "label": "Date of Birth", "kind": "text", "placeholder": "YYYY-MM-DD or approximate"},
             {"key": "nationality", "label": "Nationality", "kind": "text", "placeholder": "e.g., British"},
             {"key": "current_location", "label": "Current / Last Known Location", "kind": "text", "placeholder": "City, region, country"},
             {"key": "occupation", "label": "Occupation / Role", "kind": "text", "placeholder": "e.g., Director, consultant"},
-            {"key": "identifiers", "label": "Identifiers / Notes", "kind": "textarea", "placeholder": "Passport, social handles, company links, etc."},
+            {"key": "identifiers", "label": "Other Information", "kind": "textarea", "placeholder": "Passport, social handles, company links, etc."},
         ],
     },
     "Organization": {
@@ -33,11 +34,12 @@ SUBJECT_TYPE_SCHEMAS = {
         "fields": [
             {"key": "legal_name", "label": "Legal Name", "kind": "text", "placeholder": "Registered company or entity name"},
             {"key": "trading_names", "label": "Trading Names / Aliases", "kind": "text", "placeholder": "Comma-separated trading names"},
+            {"key": "phone_number", "label": "Primary Phone Number", "kind": "text", "placeholder": "+44 ... or main switchboard"},
             {"key": "registration_number", "label": "Registration Number", "kind": "text", "placeholder": "Company / charity / entity registration number"},
             {"key": "jurisdiction", "label": "Jurisdiction", "kind": "text", "placeholder": "Country or registry jurisdiction"},
             {"key": "website", "label": "Website", "kind": "text", "placeholder": "Primary website or portal"},
             {"key": "head_office", "label": "Head Office / Address", "kind": "text", "placeholder": "Primary address or city"},
-            {"key": "identifiers", "label": "Identifiers / Notes", "kind": "textarea", "placeholder": "Parent companies, directors, tax ids, etc."},
+            {"key": "identifiers", "label": "Other Information", "kind": "textarea", "placeholder": "Parent companies, directors, tax ids, etc."},
         ],
     },
     "Domain / Website": {
@@ -49,7 +51,7 @@ SUBJECT_TYPE_SCHEMAS = {
             {"key": "registration_date", "label": "Registration Date", "kind": "text", "placeholder": "YYYY-MM-DD"},
             {"key": "hosting_provider", "label": "Hosting Provider", "kind": "text", "placeholder": "e.g., Cloudflare"},
             {"key": "ip_addresses", "label": "Associated IP Addresses", "kind": "text", "placeholder": "Comma-separated IPs"},
-            {"key": "notes", "label": "Notes", "kind": "textarea", "placeholder": "DNS, NS, SSL, WHOIS notes, etc."},
+            {"key": "notes", "label": "Other Information", "kind": "textarea", "placeholder": "DNS, NS, SSL, WHOIS notes, etc."},
         ],
     },
     "Email Address": {
@@ -59,7 +61,7 @@ SUBJECT_TYPE_SCHEMAS = {
             {"key": "display_name", "label": "Display Name", "kind": "text", "placeholder": "Name or alias on the mailbox"},
             {"key": "associated_usernames", "label": "Associated Usernames / Handles", "kind": "text", "placeholder": "Comma-separated usernames"},
             {"key": "associated_domains", "label": "Associated Domains", "kind": "text", "placeholder": "Comma-separated domains"},
-            {"key": "notes", "label": "Notes", "kind": "textarea", "placeholder": "Compromise context, provider, metadata, etc."},
+            {"key": "notes", "label": "Other Information", "kind": "textarea", "placeholder": "Compromise context, provider, metadata, etc."},
         ],
     },
     "Username / Handle": {
@@ -79,7 +81,7 @@ SUBJECT_TYPE_SCHEMAS = {
             {"key": "country", "label": "Country", "kind": "text", "placeholder": "Country / dialling region"},
             {"key": "carrier", "label": "Carrier / Network", "kind": "text", "placeholder": "Mobile network or provider"},
             {"key": "associated_accounts", "label": "Associated Accounts / Handles", "kind": "text", "placeholder": "Comma-separated accounts"},
-            {"key": "notes", "label": "Notes", "kind": "textarea", "placeholder": "Lookup results, VoIP, messaging apps, etc."},
+            {"key": "notes", "label": "Other Information", "kind": "textarea", "placeholder": "Lookup results, VoIP, messaging apps, etc."},
         ],
     },
     "IP Address / Host": {
@@ -89,7 +91,7 @@ SUBJECT_TYPE_SCHEMAS = {
             {"key": "hostnames", "label": "Hostnames", "kind": "text", "placeholder": "Comma-separated hostnames"},
             {"key": "asn", "label": "ASN", "kind": "text", "placeholder": "e.g., AS13335"},
             {"key": "geolocation", "label": "Geolocation", "kind": "text", "placeholder": "City, region, country"},
-            {"key": "notes", "label": "Notes", "kind": "textarea", "placeholder": "Services, ports, ownership, threat context, etc."},
+            {"key": "notes", "label": "Other Information", "kind": "textarea", "placeholder": "Services, ports, ownership, threat context, etc."},
         ],
     },
     "Physical Address": {
@@ -100,7 +102,7 @@ SUBJECT_TYPE_SCHEMAS = {
             {"key": "region", "label": "Region / State", "kind": "text", "placeholder": "Region / state / county"},
             {"key": "country", "label": "Country", "kind": "text", "placeholder": "Country"},
             {"key": "coordinates", "label": "Coordinates", "kind": "text", "placeholder": "Lat, long"},
-            {"key": "notes", "label": "Notes", "kind": "textarea", "placeholder": "Occupancy, site observations, etc."},
+            {"key": "notes", "label": "Other Information", "kind": "textarea", "placeholder": "Occupancy, site observations, etc."},
         ],
     },
     "Vehicle": {
@@ -114,7 +116,7 @@ SUBJECT_TYPE_SCHEMAS = {
             {"key": "vin", "label": "VIN / Chassis Number", "kind": "text", "placeholder": "Vehicle identification number"},
             {"key": "owner_keeper", "label": "Owner / Keeper", "kind": "text", "placeholder": "Registered owner or keeper"},
             {"key": "location", "label": "Known Location / Activity", "kind": "text", "placeholder": "Last seen location or area"},
-            {"key": "notes", "label": "Notes", "kind": "textarea", "placeholder": "Insurance, sightings, plates, etc."},
+            {"key": "notes", "label": "Other Information", "kind": "textarea", "placeholder": "Insurance, sightings, plates, etc."},
         ],
     },
     "Other Subject": {
@@ -122,7 +124,7 @@ SUBJECT_TYPE_SCHEMAS = {
         "fields": [
             {"key": "display_name", "label": "Display Name", "kind": "text", "placeholder": "Subject label"},
             {"key": "description", "label": "Description", "kind": "textarea", "placeholder": "Describe the subject and why it matters"},
-            {"key": "identifiers", "label": "Identifiers / Notes", "kind": "textarea", "placeholder": "Any other relevant details"},
+            {"key": "identifiers", "label": "Other Information", "kind": "textarea", "placeholder": "Any other relevant details"},
         ],
     },
 }
@@ -179,11 +181,25 @@ def subject_display_name(subject_type: str, data: dict | None, fallback: str = "
     return fallback or subject_type
 
 
+def _format_phone_number(value: str) -> str:
+    digits = ''.join(ch for ch in value if ch.isdigit())
+    if len(digits) == 11 and digits.startswith('0'):
+        return f"+44 {digits[1:3]} {digits[3:6]} {digits[6:9]} {digits[9:11]}"
+    if len(digits) == 10:
+        return f"+{digits}"
+    if len(digits) >= 7:
+        return value.strip()
+    return value.strip()
+
+
 def subject_summary_lines(subject_type: str, data: dict | None) -> list[tuple[str, str]]:
     normalized = normalize_subject_data(subject_type, data)
     lines: list[tuple[str, str]] = []
     for field in get_subject_schema(subject_type)["fields"]:
         value = normalized.get(field["key"], "").strip()
-        if value:
-            lines.append((field["label"], value))
+        if not value:
+            continue
+        if field["key"] == "phone_number":
+            value = _format_phone_number(value)
+        lines.append((field["label"], value))
     return lines
