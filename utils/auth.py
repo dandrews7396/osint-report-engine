@@ -1,7 +1,7 @@
 import streamlit as st
 from argon2 import PasswordHasher
 from database import operations as db
-from database.db import get_user_count
+from database.db import get_user_count, init_db
 import secrets
 import hmac
 import hashlib
@@ -53,6 +53,8 @@ def verify_token(token: str) -> str:
         return None
 
 def require_page_auth() -> bool:
+    init_db()
+
     if st.session_state.get('logged_in') and st.session_state.get('username'):
         return True
 

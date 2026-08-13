@@ -24,3 +24,6 @@ def show_setup():
                     st.rerun()
                 except ValueError as e:
                     st.error(str(e))
+                except RuntimeError as e:
+                    st.error("Could not create the administrator account.")
+                    st.caption(str(e))
