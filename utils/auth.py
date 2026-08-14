@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import streamlit as st
 from argon2 import PasswordHasher
 from database import operations as db
@@ -6,6 +8,7 @@ import secrets
 import hmac
 import hashlib
 import time
+from database.db import get_user
 
 # Server-side token lifetime; kept in sync with the cookie max_age in login.py.
 # Because the expiry is part of the signed payload, a leaked token stops working
@@ -13,6 +16,43 @@ import time
 TOKEN_TTL_SECONDS = 6 * 3600
 
 ph = PasswordHasher()
+
+
+def clear_authenticated_session() -> None:
+    st.session_state.logged_in = False
+    st.session_state.pop('username', None)
+    st.session_state.pop('is_admin', None)
+
+
+def hydrate_authenticated_session(username: str) -> bool:
+    user = get_user(username)
+    if not user:
+        clear_authenticated_session()
+        return False
+
+    st.session_state.logged_in = True
+    st.session_state.username = user['username']
+    st.session_state.is_admin = bool(user.get('is_admin'))
+    return True
+
+
+def get_current_user():
+    username = st.session_state.get('username')
+    if not username:
+        return None
+
+    user = get_user(username)
+    if not user:
+        clear_authenticated_session()
+        return None
+
+    st.session_state.is_admin = bool(user.get('is_admin'))
+    return user
+
+
+def current_user_is_admin() -> bool:
+    user = get_current_user()
+    return bool(user and user.get('is_admin'))
 
 def get_cookie_controller():
     if 'cookie_controller' not in st.session_state:
@@ -55,18 +95,29 @@ def require_page_auth() -> bool:
     init_db()
 
     if st.session_state.get('logged_in') and st.session_state.get('username'):
+        if not get_current_user():
+            st.warning("Please log in to access this page.")
+            st.stop()
         return True
 
     auth_token = get_cookie_controller().get('kairos_auth_token')
     if auth_token:
         verified_username = verify_token(auth_token)
         if verified_username:
-            st.session_state.logged_in = True
-            st.session_state.username = verified_username
-            return True
+            if hydrate_authenticated_session(verified_username):
+                return True
 
-    st.session_state.logged_in = False
-    st.session_state.pop('username', None)
+    clear_authenticated_session()
     st.warning("Please log in to access this page.")
     st.stop()
     return False
+
+
+def require_admin_page_auth():
+    require_page_auth()
+    user = get_current_user()
+    if not user or not bool(user.get('is_admin')):
+        st.session_state.nav = "Dashboard"
+        st.switch_page(Path("streamlit_pages/dashboard.py"))
+        st.stop()
+    return user

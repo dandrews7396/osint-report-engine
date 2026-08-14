@@ -12,7 +12,7 @@ footer {visibility: hidden;}
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 from database.db import init_db, get_user_count
-from utils.auth import get_cookie_controller
+from utils.auth import current_user_is_admin, get_cookie_controller, hydrate_authenticated_session
 from views.setup import show_setup
 from views.login import show_login
 
@@ -44,8 +44,8 @@ def main():
         from utils.auth import verify_token
         verified_username = verify_token(auth_token)
         if verified_username:
-            st.session_state.logged_in = True
-            st.session_state.username = verified_username
+            if not hydrate_authenticated_session(verified_username):
+                get_cookie_controller().remove('kairos_auth_token')
         else:
             get_cookie_controller().remove('kairos_auth_token')
         
@@ -56,7 +56,10 @@ def main():
             show_login()
         return
 
-    menu = ["Dashboard", "Manage Clients", "Manage Cases", "Manage Subjects", "Case Findings", "Risk Library", "Generate Report", "Templates", "Settings", "Profile", "Admin: Users", "Logout"]
+    menu = ["Dashboard", "Manage Clients", "Manage Cases", "Manage Subjects", "Case Findings", "Risk Library", "Generate Report", "Templates", "Settings", "Profile"]
+    if current_user_is_admin():
+        menu.append("Admin: Users")
+    menu.append("Logout")
     if "nav" not in st.session_state or st.session_state.nav not in menu:
         st.session_state.nav = "Dashboard"
 

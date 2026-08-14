@@ -2,9 +2,10 @@ from functools import lru_cache
 
 import streamlit as st
 
+from utils.auth import current_user_is_admin
 
 @lru_cache
-def get_navigation_pages():
+def get_navigation_pages(include_admin: bool):
     from views.dashboard import show_dashboard
     from views.manage_clients import show_manage_clients
     from views.manage_cases import show_manage_cases
@@ -16,7 +17,7 @@ def get_navigation_pages():
     from views.profile import show_profile
     from views.admin import show_admin_users
 
-    return [
+    pages = [
         st.Page(show_dashboard, title="Dashboard", default=True),
         st.Page(show_manage_clients, title="Manage Clients"),
         st.Page(show_manage_cases, title="Manage Cases"),
@@ -26,10 +27,12 @@ def get_navigation_pages():
         st.Page(show_templates, title="Templates"),
         st.Page(show_settings, title="Settings"),
         st.Page(show_profile, title="Profile"),
-        st.Page(show_admin_users, title="Admin: Users"),
     ]
+    if include_admin:
+        pages.append(st.Page(show_admin_users, title="Admin: Users"))
+    return pages
 
 
 def switch_to(page_title: str) -> None:
-    pages = {page.title: page for page in get_navigation_pages()}
+    pages = {page.title: page for page in get_navigation_pages(current_user_is_admin())}
     st.switch_page(pages[page_title])

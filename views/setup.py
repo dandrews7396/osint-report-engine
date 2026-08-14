@@ -31,10 +31,12 @@ def show_setup():
             else:
                 try:
                     hash_pw = ph.hash(password)
-                    add_user(username, hash_pw)
+                    add_user(username, hash_pw, is_admin=True)
                     st.success("Administrator account created! Please log in.")
                     st.rerun()
                 except ValueError as e:
+                    st.error(str(e))
+                except PermissionError as e:
                     st.error(str(e))
                 except RuntimeError as e:
                     st.error("Could not create the administrator account.")

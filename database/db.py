@@ -31,12 +31,21 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                is_admin BOOLEAN DEFAULT 0,
                 mfa_secret TEXT,
                 mfa_enabled BOOLEAN DEFAULT 0,
                 failed_login_attempts INTEGER DEFAULT 0,
                 lockout_until REAL DEFAULT 0
             )
         ''')
+        _ensure_column(cursor, "users", "is_admin", "BOOLEAN DEFAULT 0")
+        cursor.execute("SELECT COUNT(*) FROM users WHERE COALESCE(is_admin, 0) = 1")
+        admin_count = cursor.fetchone()[0]
+        if admin_count == 0:
+            cursor.execute("SELECT id FROM users ORDER BY id ASC LIMIT 1")
+            first_user = cursor.fetchone()
+            if first_user:
+                cursor.execute("UPDATE users SET is_admin = 1 WHERE id = ?", (first_user["id"],))
 
         # 2. Settings Table
         cursor.execute('''
@@ -181,11 +190,30 @@ def get_user_count():
     finally:
         conn.close()
 
-def add_user(username, password_hash):
+def add_user(username, password_hash, *, created_by_username: str | None = None, is_admin: bool = False):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, password_hash))
+        cursor.execute("SELECT COUNT(*) FROM users")
+        existing_user_count = cursor.fetchone()[0]
+
+        if existing_user_count == 0:
+            is_admin = True
+        else:
+            if created_by_username is None:
+                raise PermissionError("Only the initial administrator can create additional users.")
+
+            cursor.execute("SELECT is_admin FROM users WHERE username = ?", (created_by_username,))
+            creator = cursor.fetchone()
+            if not creator or not bool(creator["is_admin"]):
+                raise PermissionError("Only the initial administrator can create additional users.")
+
+            is_admin = False
+
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)",
+            (username, password_hash, 1 if is_admin else 0),
+        )
         conn.commit()
         _clear_read_caches()
     except sqlite3.IntegrityError:
