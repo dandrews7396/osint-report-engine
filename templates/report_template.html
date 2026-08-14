@@ -300,8 +300,17 @@
         }
 
         img {
-            max-width: 100%;
-            height: auto;
+            display: block;
+            max-width: min(700px, 100%);
+            width: auto !important;
+            height: auto !important;
+            margin: 12px auto;
+            page-break-inside: avoid;
+        }
+
+        img[width], img[height] {
+            width: auto !important;
+            height: auto !important;
         }
     </style>
 </head>
