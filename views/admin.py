@@ -25,7 +25,7 @@ def show_admin_users():
         manageable_users = [user for user in get_users() if user["username"] != admin_user["username"]]
         action_options = ["Create New User"]
         if manageable_users:
-            action_options.append("Update Existing User Password")
+            action_options.append("Update Existing User")
 
         action = st.selectbox("Action", action_options, key="admin_user_action")
         admin_pw = st.text_input("Your Current Password (Admin)", type="password", key="admin_current_password")
