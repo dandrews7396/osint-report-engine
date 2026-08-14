@@ -46,6 +46,13 @@ def _clear_subject_widget_state(subject_id: int | str, prefix: str) -> None:
             del st.session_state[key]
 
 
+def _years_ago(years: int, from_date: date) -> date:
+    try:
+        return from_date.replace(year=from_date.year - years)
+    except ValueError:
+        return from_date.replace(month=2, day=28, year=from_date.year - years)
+
+
 def _render_subject_fields(subject_id: int | str, subject_type: str, existing_data: dict | None, prefix: str) -> dict:
     schema = get_subject_schema(subject_type)
     existing_data = normalize_subject_data(subject_type, existing_data)
@@ -58,14 +65,24 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
         elif field["kind"] == "date":
             stripped_value = (default_value or "").strip()
             parsed_date = None
+            today = date.today()
+            min_value = _years_ago(field["min_years_ago"], today) if field.get("min_years_ago") else None
+            max_value = today if field.get("max_date") == "today" else None
             if stripped_value:
                 try:
                     parsed_date = date.fromisoformat(stripped_value)
                 except ValueError:
                     parsed_date = None
 
-            if stripped_value and parsed_date is None:
-                st.caption(f"{field['label']} contains a non-calendar value. Replace it with an exact date to use the calendar picker.")
+            if stripped_value and (
+                parsed_date is None
+                or (min_value is not None and parsed_date < min_value)
+                or (max_value is not None and parsed_date > max_value)
+            ):
+                st.caption(
+                    f"{field['label']} is outside the calendar picker range or is not an exact date. "
+                    "Replace it with an exact in-range date to use the calendar picker."
+                )
                 values[field["key"]] = st.text_input(
                     field["label"],
                     value=default_value,
@@ -76,6 +93,8 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
                 selected_date = st.date_input(
                     field["label"],
                     value=parsed_date,
+                    min_value=min_value,
+                    max_value=max_value,
                     format="YYYY-MM-DD",
                     key=key,
                 )
