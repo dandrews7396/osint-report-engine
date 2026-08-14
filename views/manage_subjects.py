@@ -31,6 +31,17 @@ def _subject_field_key(subject_id: int | str, subject_type: str, field_key: str,
     return f"{prefix}_{subject_id}_{subject_type}_{field_key}"
 
 
+def _subject_editor_key(subject_id: int | str, field_key: str, prefix: str) -> str:
+    return f"{prefix}_{subject_id}_{field_key}"
+
+
+def _clear_subject_widget_state(subject_id: int | str, prefix: str) -> None:
+    prefix_root = f"{prefix}_{subject_id}_"
+    for key in list(st.session_state.keys()):
+        if key.startswith(prefix_root):
+            del st.session_state[key]
+
+
 def _render_subject_fields(subject_id: int | str, subject_type: str, existing_data: dict | None, prefix: str) -> dict:
     schema = get_subject_schema(subject_type)
     existing_data = normalize_subject_data(subject_type, existing_data)
@@ -52,6 +63,16 @@ def _subject_label(subject: dict) -> str:
 def show_manage_subjects():
     @fragment
     def render_manage_subjects():
+        if st.session_state.pop("clear_new_subject_fields", False):
+            for key in (
+                "new_subject_display_name",
+                "new_subject_relationship",
+                "new_subject_type",
+                "new_subject_notes",
+            ):
+                st.session_state.pop(key, None)
+            _clear_subject_widget_state("new", "new_subject")
+
         st.title("Case Subjects")
         st.write("Assign multiple subjects to each case, capture the relevant type-specific details, and link findings back to the right subject.")
 
@@ -96,31 +117,37 @@ def show_manage_subjects():
                     st.caption(f"Linked findings: {subject.get('finding_count', 0)}")
 
                     if is_expanded:
+                        display_key = _subject_editor_key(subject['id'], "display_name", "edit_subject")
+                        relationship_key = _subject_editor_key(subject['id'], "relationship", "edit_subject")
+                        type_key = _subject_editor_key(subject['id'], "type", "edit_subject")
+                        notes_key = _subject_editor_key(subject['id'], "notes", "edit_subject")
+
+                        st.session_state.setdefault(display_key, subject.get('display_name', ''))
+                        st.session_state.setdefault(relationship_key, subject.get('relationship_to_case', SUBJECT_RELATIONSHIP_OPTIONS[0]))
+                        st.session_state.setdefault(type_key, subject.get('subject_type', get_subject_type_choices()[0]))
+                        st.session_state.setdefault(notes_key, subject.get('notes', ''))
+
+                        e_type = st.selectbox(
+                            "Subject Type",
+                            get_subject_type_choices(),
+                            key=type_key,
+                        )
                         with st.form(f"edit_subject_{subject['id']}"):
                             e_display_name = st.text_input(
                                 "Display Name",
-                                value=subject.get('display_name', ''),
                                 help="Used in case lists and reports.",
-                                key=f"edit_subject_{subject['id']}_display_name",
+                                key=display_key,
                             )
                             e_relationship = st.selectbox(
                                 "Relationship to Case",
                                 SUBJECT_RELATIONSHIP_OPTIONS,
-                                index=SUBJECT_RELATIONSHIP_OPTIONS.index(subject.get('relationship_to_case')) if subject.get('relationship_to_case') in SUBJECT_RELATIONSHIP_OPTIONS else 0,
-                                key=f"edit_subject_{subject['id']}_relationship",
-                            )
-                            e_type = st.selectbox(
-                                "Subject Type",
-                                get_subject_type_choices(),
-                                index=get_subject_type_choices().index(subject.get('subject_type')) if subject.get('subject_type') in get_subject_type_choices() else 0,
-                                key=f"edit_subject_{subject['id']}_type",
+                                key=relationship_key,
                             )
                             e_data = _render_subject_fields(subject['id'], e_type, subject.get('subject_data', {}), "edit_subject")
                             e_notes = st.text_area(
                                 "Notes (these will not appear in a generated report)",
-                                value=subject.get('notes', ''),
                                 help="Internal-only notes for case management. They are not included in generated reports.",
-                                key=f"edit_subject_{subject['id']}_notes",
+                                key=notes_key,
                             )
 
                             if st.form_submit_button("Save Subject Changes"):
@@ -135,6 +162,7 @@ def show_manage_subjects():
                                     e_notes,
                                 )
                                 st.session_state.edit_subject_id = None
+                                _clear_subject_widget_state(subject['id'], "edit_subject")
                                 st.success("Subject updated.")
                                 st.rerun()
 
@@ -147,7 +175,17 @@ def show_manage_subjects():
 
         st.divider()
         st.subheader("Add New Subject")
-        with st.form("add_subject", clear_on_submit=True):
+        st.session_state.setdefault("new_subject_display_name", "")
+        st.session_state.setdefault("new_subject_relationship", SUBJECT_RELATIONSHIP_OPTIONS[0])
+        st.session_state.setdefault("new_subject_type", get_subject_type_choices()[0])
+        st.session_state.setdefault("new_subject_notes", "")
+
+        new_type = st.selectbox(
+            "Subject Type",
+            get_subject_type_choices(),
+            key="new_subject_type",
+        )
+        with st.form("add_subject"):
             col1, col2 = st.columns(2)
             new_display_name = col1.text_input(
                 "Display Name",
@@ -158,11 +196,6 @@ def show_manage_subjects():
                 "Relationship to Case",
                 SUBJECT_RELATIONSHIP_OPTIONS,
                 key="new_subject_relationship",
-            )
-            new_type = st.selectbox(
-                "Subject Type",
-                get_subject_type_choices(),
-                key="new_subject_type",
             )
             new_data = _render_subject_fields("new", new_type, {}, "new_subject")
             new_notes = st.text_area(
@@ -183,6 +216,7 @@ def show_manage_subjects():
                     new_notes,
                 )
                 st.session_state.edit_subject_id = new_id
+                st.session_state["clear_new_subject_fields"] = True
                 st.success(f"Added subject: {display_name}")
                 st.rerun()
 
