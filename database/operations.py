@@ -178,8 +178,8 @@ def get_cases() -> list[dict]:
                 c.id, c.case_ref, c.case_name, c.case_type, c.client_id, c.start_date, c.end_date, c.report_date,
                 c.lead_investigator AS investigator_name, c.investigator_description, c.target_scope,
                 c.legitimate_interest_assessment AS legitimate_interest, c.executive_assessment AS executive_summary,
-                c.key_findings_summary AS key_findings_summary, c.tools_and_sources_used AS tools_used, c.deleted_at,
-                cl.name as client_name
+                c.key_findings_summary AS key_findings_summary, c.covert_persona_reference AS covert_persona_reference,
+                c.tools_and_sources_used AS tools_used, c.deleted_at, cl.name as client_name
             FROM cases c 
             JOIN clients cl ON c.client_id = cl.id
             WHERE c.deleted_at IS NULL AND cl.deleted_at IS NULL
@@ -224,6 +224,7 @@ def add_case(
     legitimate_interest_assessment: str = '',
     executive_assessment: str = '',
     key_findings_summary: str = '',
+    covert_persona_reference: str = '',
     tools_and_sources_used: str = ''
 ) -> int:
     conn = get_connection()
@@ -234,13 +235,13 @@ def add_case(
                 case_ref, case_name, client_id, case_type, start_date, end_date, report_date,
                 lead_investigator, investigator_description, target_scope,
                 legitimate_interest_assessment,
-                executive_assessment, key_findings_summary, tools_and_sources_used
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                executive_assessment, key_findings_summary, covert_persona_reference, tools_and_sources_used
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             case_ref, case_name, client_id, case_type, start_date, end_date, report_date,
             lead_investigator, investigator_description, target_scope,
             legitimate_interest_assessment, executive_assessment, key_findings_summary,
-            tools_and_sources_used
+            covert_persona_reference, tools_and_sources_used
         ))
         new_id = cursor.lastrowid
         conn.commit()
@@ -267,6 +268,7 @@ def update_case(
     legitimate_interest_assessment: str,
     executive_assessment: str,
     key_findings_summary: str,
+    covert_persona_reference: str,
     tools_and_sources_used: str
 ):
     conn = get_connection()
@@ -277,13 +279,13 @@ def update_case(
             SET case_ref = ?, case_name = ?, case_type = ?, start_date = ?, end_date = ?, report_date = ?, 
                 lead_investigator = ?, investigator_description = ?, target_scope = ?, 
                 legitimate_interest_assessment = ?, 
-                executive_assessment = ?, key_findings_summary = ?, tools_and_sources_used = ?
+                executive_assessment = ?, key_findings_summary = ?, covert_persona_reference = ?, tools_and_sources_used = ?
             WHERE id = ?
         """, (
             case_ref, case_name, case_type, start_date, end_date, report_date,
             lead_investigator, investigator_description, target_scope,
             legitimate_interest_assessment,
-            executive_assessment, key_findings_summary, tools_and_sources_used, case_id
+            executive_assessment, key_findings_summary, covert_persona_reference, tools_and_sources_used, case_id
         ))
         conn.commit()
         _clear_read_caches()

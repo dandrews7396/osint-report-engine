@@ -99,6 +99,11 @@ def show_manage_cases():
                             ec_inv_idx = inv_names.index(ec_inv_name)
 
                         ec_inv = st.selectbox("Lead Investigator", inv_names, index=ec_inv_idx)
+                        ec_covert_persona_reference = st.text_input(
+                            "Covert Persona Reference",
+                            value=c.get('covert_persona_reference', '') or '',
+                            help="Optional, user-editable reference used in the report header for the persona or operating identity associated with this case.",
+                        )
                         ec_exec_summary = st.text_area("Executive Summary", value=c.get('executive_summary', '') or '', height=120)
                         ec_key_findings = st.text_area("Key Intelligence Findings Summary", value=c.get('key_findings_summary', '') or '', height=120)
 
@@ -146,6 +151,7 @@ def show_manage_cases():
                                 legitimate_interest_assessment=ec_gdpr,
                                 executive_assessment=ec_exec_summary,
                                 key_findings_summary=ec_key_findings,
+                                covert_persona_reference=ec_covert_persona_reference,
                                 tools_and_sources_used=t_used_json
                             )
 
@@ -188,6 +194,12 @@ def show_manage_cases():
 
                 c_type = st.selectbox("Case Type", CASE_TYPES)
                 c_inv = st.selectbox("Lead Investigator", list(investigator_options.keys()))
+                c_covert_persona_reference = st.text_input(
+                    "Covert Persona Reference",
+                    key="new_case_covert_persona_reference",
+                    placeholder="e.g., Persona-12 / Alias / Operating identity",
+                    help="Optional reference used in the report header for the covert persona or operating identity associated with this case.",
+                )
 
                 col_s, col_e, col_r = st.columns(3)
                 c_start = col_s.date_input("Start Date").strftime('%Y-%m-%d')
@@ -212,6 +224,7 @@ def show_manage_cases():
                         legitimate_interest_assessment=settings.get('default_legitimate_interest', ''),
                         executive_assessment='',
                         key_findings_summary='',
+                        covert_persona_reference=c_covert_persona_reference,
                         tools_and_sources_used=settings.get('tools_used', '')
                     )
                     st.session_state.edit_case_id = new_id

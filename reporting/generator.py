@@ -270,7 +270,10 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
         env = SandboxedEnvironment()
         template = env.from_string(md_content)
         
-        firm_dict = dict(firm)
+        firm_dict = dict(firm) if isinstance(firm, dict) else {f.get('key'): f.get('value') for f in firm} if isinstance(firm, list) else {}
+        firm_name = firm_dict.get('name') or firm_dict.get('firm_name') or ''
+        firm_dict['name'] = firm_name
+        firm_dict['firm_name'] = firm_name
         firm_dict['executive_summary'] = case.get('executive_summary', firm_dict.get('executive_summary', ''))
         firm_dict['key_findings_summary'] = case.get('key_findings_summary', firm_dict.get('key_findings_summary', ''))
         firm_dict['legitimate_interest'] = case.get('legitimate_interest', firm_dict.get('legitimate_interest', ''))
@@ -288,6 +291,15 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
                 investigator['description'] = inv.get('bio', '')
                 investigator['title'] = inv.get('title', '')
                 break
+
+        case['covert_persona_reference'] = (
+            case.get('covert_persona_reference')
+            or case.get('prepared_by')
+            or case.get('report_prepared_by')
+            or investigator.get('name')
+            or firm_name
+            or 'N/A'
+        )
         
         tools_str = case.get('tools_used', '[]')
         try:
@@ -346,7 +358,10 @@ def generate_attestation(case, client, firm, output_path, custom_bio=None):
         case['start_date_formatted'] = format_date_with_suffix(case.get('start_date', ''))
         case['end_date_formatted'] = format_date_with_suffix(case.get('end_date', ''))
 
-        firm_dict = {f.get('key'): f.get('value') for f in firm} if isinstance(firm, list) else firm
+        firm_dict = {f.get('key'): f.get('value') for f in firm} if isinstance(firm, list) else dict(firm) if isinstance(firm, dict) else {}
+        firm_name = firm_dict.get('name') or firm_dict.get('firm_name') or ''
+        firm_dict['name'] = firm_name
+        firm_dict['firm_name'] = firm_name
 
         investigator = {
             'name': case.get('investigator_name', ''),
@@ -359,7 +374,16 @@ def generate_attestation(case, client, firm, output_path, custom_bio=None):
             if db_inv:
                 investigator['description'] = custom_bio if custom_bio is not None else db_inv.get('bio', '')
                 investigator['title'] = db_inv.get('title', '')
-                
+
+        case['covert_persona_reference'] = (
+            case.get('covert_persona_reference')
+            or case.get('prepared_by')
+            or case.get('report_prepared_by')
+            or investigator.get('name')
+            or firm_name
+            or 'N/A'
+        )
+
         env = SandboxedEnvironment()
         template = env.from_string(md_content)
         

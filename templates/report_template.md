@@ -1,4 +1,7 @@
-# {{ firm.name | upper }} | {{ case.case_type | upper }} REPORT
+<div class="header-container">
+  <div class="agency-title">{{ firm.name | upper }}</div>
+  <div class="report-title">{{ case.case_type | upper }} REPORT</div>
+</div>
 
 <div class="report-shell">
 <table class="edd-cover-grid">
@@ -15,8 +18,8 @@
     <td class="value">{{ client.name }}</td>
   </tr>
   <tr>
-    <td class="label">Prepared By:</td>
-    <td class="value">{{ firm.name }}</td>
+    <td class="label">Covert Persona Reference:</td>
+    <td class="value">{{ case.covert_persona_reference or 'N/A' }}</td>
     <td class="label">Lead Investigator:</td>
     <td class="value">{{ investigator.name }}{% if investigator.title %} ({{ investigator.title }}){% endif %}</td>
   </tr>
