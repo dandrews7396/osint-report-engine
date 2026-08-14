@@ -65,7 +65,14 @@ def show_manage_cases():
             is_editing = edit_case_id == c['id']
             case_label = f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})"
 
-            with st.expander(case_label, expanded=is_editing):
+            if is_editing:
+                st.markdown(f"#### {case_label}")
+                st.caption("Editing is locked open until you save or cancel.")
+                item_container = st.container()
+            else:
+                item_container = st.expander(case_label)
+
+            with item_container:
                 if is_editing:
                     with st.form(f"edit_case_{c['id']}"):
                         col_c1, col_c2 = st.columns(2)

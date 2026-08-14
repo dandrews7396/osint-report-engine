@@ -1,3 +1,5 @@
+from datetime import date
+
 import streamlit as st
 
 from database import operations as db
@@ -53,6 +55,31 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
         default_value = st.session_state.get(key, existing_data.get(field["key"], ""))
         if field["kind"] == "textarea":
             values[field["key"]] = st.text_area(field["label"], value=default_value, placeholder=field.get("placeholder", ""), key=key)
+        elif field["kind"] == "date":
+            stripped_value = (default_value or "").strip()
+            parsed_date = None
+            if stripped_value:
+                try:
+                    parsed_date = date.fromisoformat(stripped_value)
+                except ValueError:
+                    parsed_date = None
+
+            if stripped_value and parsed_date is None:
+                st.caption(f"{field['label']} contains a non-calendar value. Replace it with an exact date to use the calendar picker.")
+                values[field["key"]] = st.text_input(
+                    field["label"],
+                    value=default_value,
+                    placeholder=field.get("placeholder", ""),
+                    key=key,
+                )
+            else:
+                selected_date = st.date_input(
+                    field["label"],
+                    value=parsed_date,
+                    format="YYYY-MM-DD",
+                    key=key,
+                )
+                values[field["key"]] = selected_date.isoformat() if selected_date else ""
         else:
             values[field["key"]] = st.text_input(field["label"], value=default_value, placeholder=field.get("placeholder", ""), key=key)
     return values
@@ -130,7 +157,15 @@ def show_manage_subjects():
         else:
             for subject in subjects:
                 is_editing = edit_subject_id == subject['id']
-                with st.expander(_subject_label(subject), expanded=is_editing):
+                subject_label = _subject_label(subject)
+                if is_editing:
+                    st.markdown(f"#### {subject_label}")
+                    st.caption("Editing is locked open until you save or cancel.")
+                    item_container = st.container()
+                else:
+                    item_container = st.expander(subject_label)
+
+                with item_container:
                     st.caption(f"Linked findings: {subject.get('finding_count', 0)}")
 
                     if is_editing:

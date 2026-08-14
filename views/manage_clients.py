@@ -27,7 +27,14 @@ def show_manage_clients():
                 is_active = active_client_id == client["id"]
                 is_editing = edit_client_id == client["id"]
                 label = f"{client['name']}{' (Active)' if is_active else ''}"
-                with st.expander(label, expanded=is_editing):
+                if is_editing:
+                    st.markdown(f"#### {label}")
+                    st.caption("Editing is locked open until you save or cancel.")
+                    item_container = st.container()
+                else:
+                    item_container = st.expander(label)
+
+                with item_container:
                     if is_editing:
                         client_types = [
                             "Law Firm",

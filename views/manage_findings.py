@@ -75,10 +75,15 @@ def show_manage_findings():
 
             for f in findings:
                 is_expanded = edit_finding_id == f['id']
-                with st.expander(
-                    f"[{f.get('risk_level', 'Unspecified')}] [{f.get('confidence_level', 'Unspecified')}] {f.get('title', 'Untitled')} ({f.get('category', 'General')})",
-                    expanded=is_expanded,
-                ):
+                finding_label = f"[{f.get('risk_level', 'Unspecified')}] [{f.get('confidence_level', 'Unspecified')}] {f.get('title', 'Untitled')} ({f.get('category', 'General')})"
+                if is_expanded:
+                    st.markdown(f"#### {finding_label}")
+                    st.caption("Editing is locked open until you save or cancel.")
+                    item_container = st.container()
+                else:
+                    item_container = st.expander(finding_label)
+
+                with item_container:
                     if f.get('subject_name'):
                         st.caption(f"Linked subject: {f['subject_name']}")
                     if is_expanded:
