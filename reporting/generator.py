@@ -57,6 +57,11 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
         with open(md_template_path, 'r', encoding='utf-8') as f:
             md_content = f.read()
 
+        has_detailed_findings_section = (
+            '{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}' in md_content
+            or '{{ findings.detailed_findings }}' in md_content
+        )
+
         case['report_date_formatted'] = format_date_with_suffix(case.get('report_date', ''))
         case['start_date_formatted'] = format_date_with_suffix(case.get('start_date', ''))
         case['end_date_formatted'] = format_date_with_suffix(case.get('end_date', ''))
@@ -72,7 +77,15 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
         # Sort findings strictly by risk_level primary
         findings.sort(key=lambda x: risk_rank.get(x.get('risk_level', 'Informational'), 99))
 
-        subjects = db.get_case_subjects(case['id'])
+        case_id = case.get('id')
+        subjects = db.get_case_subjects(case_id) if case_id is not None else []
+        subjects = sorted(
+            subjects,
+            key=lambda s: (
+                0 if str(s.get('relationship_to_case', '')).lower() == 'principal subject' else 1,
+                s.get('id', 0) or 0,
+            )
+        )
         findings_by_subject = {}
         for finding in findings:
             subject_id = finding.get('subject_id')
@@ -145,7 +158,10 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
                 target_html = 'N/A'
                 
             title_slug = finding['anchor']
-            title_html = f'<a href="#{title_slug}" style="color: #6b46c1; text-decoration: underline;">{finding["title"]}</a>'
+            if has_detailed_findings_section:
+                title_html = f'<a href="#{title_slug}" style="color: #6b46c1; text-decoration: underline;">{finding["title"]}</a>'
+            else:
+                title_html = finding["title"]
             subject_html = finding.get('subject_name') or 'Unassigned'
             
             table_html += f'    <tr>\n'
@@ -209,7 +225,7 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
 {% endif %}
 
 <div style="page-break-inside: avoid;" markdown="1">
-### <a name="{{ finding.anchor }}"></a>{{ finding.title }}
+<h3 id="{{ finding.anchor }}">{{ finding.title }}</h3>
 
 <div style="margin-bottom: 10px;">
     <span class="risk-badge {{ finding.risk_level }}">{{ finding.risk_level }}</span>

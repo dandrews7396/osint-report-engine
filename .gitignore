@@ -20,6 +20,8 @@ data/*
 # Generated reports
 reports/*
 !reports/.gitkeep
+examples/
+output/
 
 # IDEs
 .idea/

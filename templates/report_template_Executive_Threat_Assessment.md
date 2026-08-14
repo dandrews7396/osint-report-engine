@@ -9,16 +9,16 @@
     <td class="value">{{ case.case_ref }}</td>
   </tr>
   <tr>
-    <td class="label">Investigation Type:</td>
+    <td class="label">Assessment Type:</td>
     <td class="value">{{ case.case_type }}</td>
-    <td class="label">Prepared For:</td>
+    <td class="label">Client:</td>
     <td class="value">{{ client.name }}</td>
   </tr>
   <tr>
-    <td class="label">Prepared By:</td>
-    <td class="value">{{ firm.name }}</td>
     <td class="label">Lead Investigator:</td>
     <td class="value">{{ investigator.name }}{% if investigator.title %} ({{ investigator.title }}){% endif %}</td>
+    <td class="label">Prepared By:</td>
+    <td class="value">{{ firm.name }}</td>
   </tr>
   <tr>
     <td class="label">Investigation Period:</td>

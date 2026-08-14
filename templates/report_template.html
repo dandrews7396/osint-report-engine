@@ -2,183 +2,283 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ case.case_ref }} - Corporate EDD Report</title>
+    <title>{{ case.case_ref }} - Intelligence Report</title>
     <style>
         @page {
             size: A4;
-            margin: 20mm 15mm 20mm 15mm;
+            margin: 18mm 16mm 18mm 16mm;
             @bottom-left {
-                content: "STRICTLY CONFIDENTIAL - COMMERCIAL IN CONFIDENCE";
-                font-family: Arial, sans-serif;
-                font-size: 7.5pt;
-                font-weight: bold;
-                color: #718096;
+                content: "CONFIDENTIAL INTELLIGENCE REPORT";
+                font-family: "Segoe UI", Arial, sans-serif;
+                font-size: 7pt;
+                font-weight: 700;
+                color: #64748b;
             }
             @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
-                font-family: Arial, sans-serif;
-                font-size: 8pt;
-                color: #718096;
+                font-family: "Segoe UI", Arial, sans-serif;
+                font-size: 7.5pt;
+                color: #64748b;
             }
         }
 
+        :root {
+            --ink: #111827;
+            --muted: #475569;
+            --panel: #f8fafc;
+            --line: #dfe7f1;
+            --navy: #0f172a;
+            --slate: #334155;
+            --accent: #b08a44;
+            --accent-soft: #f3ead4;
+            --blue: #1d4ed8;
+            --red: #b91c1c;
+            --amber: #b45309;
+            --green: #166534;
+        }
+
         body {
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 9.5pt;
-            line-height: 1.5;
-            color: #1a202c;
+            font-family: "Segoe UI", Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.55;
+            color: var(--ink);
+            background: #ffffff;
         }
 
         .header-container {
             text-align: center;
-            border-bottom: 2px solid #1a202c;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            border-bottom: 2px solid var(--navy);
+            padding-bottom: 12px;
+            margin-bottom: 22px;
         }
 
         .agency-title {
-            font-size: 11pt;
-            font-weight: bold;
-            letter-spacing: 1px;
-            color: #4a5568;
+            font-size: 10.5pt;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            color: var(--muted);
+            text-transform: uppercase;
         }
 
         .report-title {
-            font-size: 18pt;
-            font-weight: bold;
-            color: #000000;
-            margin-top: 5px;
+            font-size: 22pt;
+            font-weight: 800;
+            color: var(--navy);
+            margin-top: 6px;
+            letter-spacing: 0.3px;
         }
 
         .report-subtitle {
-            font-size: 10pt;
-            font-weight: bold;
+            font-size: 9.5pt;
+            font-weight: 700;
             letter-spacing: 0.5px;
-            color: #2b6cb0;
+            color: var(--accent);
+            text-transform: uppercase;
         }
 
-        /* Cover Meta Grid */
+        .report-shell {
+            margin-top: 10px;
+            margin-bottom: 14px;
+        }
+
         .edd-cover-grid {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 25px;
+            margin: 14px 0 18px 0;
             font-size: 8.5pt;
         }
 
         .edd-cover-grid td {
-            padding: 5px 8px;
-            border: 1px solid #cbd5e0;
+            padding: 6px 8px;
+            border: 1px solid var(--line);
+            vertical-align: top;
         }
 
         .edd-cover-grid .label {
-            background-color: #edf2f7;
-            font-weight: bold;
+            background: var(--panel);
             width: 18%;
-            color: #2d3748;
+            font-weight: 700;
+            color: var(--slate);
         }
 
         .edd-cover-grid .value {
             width: 32%;
-            background-color: #ffffff;
+            background: #ffffff;
         }
 
         .highlight-red {
-            color: #c53030;
-            font-weight: bold;
+            color: var(--red);
+            font-weight: 700;
         }
 
-        /* Headings */
+        h1, h2, h3, h4 {
+            color: var(--navy);
+            margin-top: 18px;
+            margin-bottom: 8px;
+            page-break-after: avoid;
+        }
+
         h2 {
-            font-size: 12pt;
-            color: #1a202c;
-            border-bottom: 1px solid #2b6cb0;
+            font-size: 12.5pt;
+            font-weight: 800;
+            border-bottom: 1.5px solid var(--accent);
             padding-bottom: 4px;
-            margin-top: 22px;
             text-transform: uppercase;
+            letter-spacing: 0.25px;
         }
 
         h3 {
-            font-size: 10.5pt;
-            color: #2b6cb0;
-            margin-top: 16px;
+            font-size: 10.8pt;
+            font-weight: 700;
+            color: var(--slate);
         }
 
-        /* Tables */
+        h4 {
+            font-size: 9.8pt;
+            font-weight: 700;
+            color: var(--slate);
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 12px 0;
+            margin: 12px 0 16px 0;
             font-size: 8.5pt;
         }
 
         th, td {
-            padding: 6px 10px;
-            border: 1px solid #cbd5e0;
+            padding: 7px 9px;
+            border: 1px solid var(--line);
             text-align: left;
+            vertical-align: top;
         }
 
         th {
-            background-color: #2d3748;
+            background: var(--navy);
             color: #ffffff;
-            font-weight: bold;
+            font-weight: 700;
         }
 
         .edd-keyvalue-table td.kv-label {
             width: 30%;
-            background-color: #f7fafc;
-            font-weight: bold;
+            background: var(--panel);
+            font-weight: 700;
+            color: var(--slate);
         }
 
-        /* Risk Callouts & Boxes */
-        .risk-summary-box {
-            padding: 10px 14px;
-            border-radius: 3px;
-            font-size: 10pt;
-            margin-bottom: 15px;
-            border-left: 5px solid #cbd5e0;
-            background-color: #f7fafc;
-        }
-
-        .risk-summary-box.medium-risk, .risk-summary-box.adverse-findings {
-            border-left-color: #dd6b20;
-            background-color: #fffaf0;
+        .risk-summary-box,
+        .executive-assessment-block,
+        .callout-warning,
+        .callout-note,
+        .hash-box {
+            border-left: 4px solid var(--accent);
+            padding: 10px 12px;
+            margin: 10px 0 14px 0;
+            background: var(--panel);
         }
 
         .risk-summary-box.high-risk {
-            border-left-color: #c53030;
-            background-color: #fff5f5;
+            border-left-color: var(--red);
+            background: #fef2f2;
+        }
+
+        .risk-summary-box.medium-risk,
+        .risk-summary-box.adverse-findings {
+            border-left-color: var(--amber);
+            background: #fff7ed;
+        }
+
+        .risk-summary-box.low-risk {
+            border-left-color: var(--green);
+            background: #f0fdf4;
         }
 
         .callout-warning {
-            background-color: #fffaf0;
-            border-left: 4px solid #dd6b20;
-            padding: 8px 12px;
-            margin: 12px 0;
-            font-size: 8.5pt;
+            border-left-color: var(--amber);
+            background: #fff7ed;
         }
 
         .callout-note {
-            background-color: #f7fafc;
-            border-left: 4px solid #3182ce;
-            padding: 8px 12px;
-            margin: 12px 0;
-            font-size: 8.5pt;
-        }
-
-        .executive-assessment-block {
-            background-color: #edf2f7;
-            padding: 10px;
-            border: 1px solid #cbd5e0;
-            margin-top: 15px;
-            font-size: 9pt;
+            border-left-color: var(--blue);
+            background: #eff6ff;
         }
 
         .hash-box {
-            background-color: #edf2f7;
-            border: 1px solid #cbd5e0;
-            padding: 8px;
+            background: #f8fafc;
+            border-left-color: var(--navy);
             font-size: 8pt;
-            margin: 15px 0;
+            word-break: break-all;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 7px;
+            font-size: 7.5pt;
+            font-weight: 700;
+            color: #fff;
+            border-radius: 3px;
+        }
+
+        .badge-high { background-color: var(--green); }
+        .badge-med { background-color: var(--amber); }
+        .badge-low { background-color: var(--red); }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 8pt;
+            font-weight: 700;
+            color: white;
+        }
+
+        .risk-badge.Critical { background: var(--red); }
+        .risk-badge.High { background: #dc2626; }
+        .risk-badge.Medium { background: var(--amber); }
+        .risk-badge.Low { background: var(--green); }
+        .risk-badge.Informational { background: #2563eb; }
+
+        .subject-panel {
+            background: #f8fafc;
+            border: 1px solid var(--line);
+            padding: 10px 12px;
+            margin: 10px 0 12px 0;
+        }
+
+        .case-context-block {
+            border: 1px solid var(--line);
+            border-left: 4px solid var(--navy);
+            background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+            margin: 10px 0 16px 0;
+        }
+
+        .case-context-header {
+            padding: 8px 12px;
+            background: var(--navy);
+            color: #ffffff;
+            font-size: 8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+
+        .case-context-row {
+            padding: 10px 12px;
+            border-top: 1px solid var(--line);
+        }
+
+        .case-context-label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 8pt;
+            font-weight: 700;
+            color: var(--slate);
+            text-transform: uppercase;
+            letter-spacing: 0.35px;
+        }
+
+        .case-context-value {
+            color: var(--ink);
         }
 
         .signoff-table {
@@ -192,25 +292,16 @@
             vertical-align: top;
         }
 
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            font-weight: bold;
-            font-size: 7.5pt;
-            color: #fff;
-            border-radius: 2px;
-        }
-
-        .badge-high { background-color: #38a169; }
-        .badge-med { background-color: #dd6b20; }
-        .badge-low { background-color: #e53e3e; }
-
         hr {
             border: 0;
             height: 1px;
-            background: #cbd5e0;
+            background: var(--line);
             margin: 18px 0;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
         }
     </style>
 </head>

@@ -68,6 +68,8 @@ No key findings summary has been supplied for this case.
 
 ## Intelligence Tools & Methodology
 
+The following tools and collection methods were used throughout the assessment:
+
 {% if case.tools_used_table %}{{ case.tools_used_table | safe }}{% else %}{{ case.tools_used | safe }}{% endif %}
 
 ---

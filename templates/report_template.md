@@ -1,95 +1,111 @@
-# OPEN SOURCE INTELLIGENCE REPORT
+# {{ firm.name | upper }} | {{ case.case_type | upper }} REPORT
 
-<div style="margin-top: 40px; margin-bottom: 50px;">
-
-| **Case Name:** | {{ case.case_name }} |
-| **Case Reference:** | {{ case.case_ref }} |
-| **Investigation Type:** | {{ case.case_type }} |
-| **Prepared For:** | {{ client.name }} |
-| **Prepared By:** | {{ firm.name }} |
-| **Lead Investigator:** | {{ investigator.name }}{% if investigator.title %} ({{ investigator.title }}){% endif %} |
-| **Investigation Period:** | {% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} – {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %} |
-| **Report Date:** | {% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %} |
-
+<div class="report-shell">
+<table class="edd-cover-grid">
+  <tr>
+    <td class="label">Case Name:</td>
+    <td class="value">{{ case.case_name }}</td>
+    <td class="label">Case Reference:</td>
+    <td class="value">{{ case.case_ref }}</td>
+  </tr>
+  <tr>
+    <td class="label">Investigation Type:</td>
+    <td class="value">{{ case.case_type }}</td>
+    <td class="label">Prepared For:</td>
+    <td class="value">{{ client.name }}</td>
+  </tr>
+  <tr>
+    <td class="label">Prepared By:</td>
+    <td class="value">{{ firm.name }}</td>
+    <td class="label">Lead Investigator:</td>
+    <td class="value">{{ investigator.name }}{% if investigator.title %} ({{ investigator.title }}){% endif %}</td>
+  </tr>
+  <tr>
+    <td class="label">Investigation Period:</td>
+    <td class="value">{% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} – {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %}</td>
+    <td class="label">Report Date:</td>
+    <td class="value">{% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %}</td>
+  </tr>
+</table>
 </div>
 
 ---
 
-<div style="page-break-before: always;"></div>
+## Scope, Legal Basis & Case Context
 
-## Executive Summary
+<div class="case-context-block">
+  <div class="case-context-header">Case Instruction & Lawful Basis</div>
+  <div class="case-context-row">
+    <span class="case-context-label">Target Scope</span>
+    <div class="case-context-value">{{ case.target_scope if case.target_scope else 'No target scope supplied.' }}</div>
+  </div>
+  <div class="case-context-row">
+    <span class="case-context-label">Legitimate Interest / Legal Basis</span>
+    <div class="case-context-value">{{ case.legitimate_interest if case.legitimate_interest else 'No lawful-basis statement supplied.' }}</div>
+  </div>
+</div>
 
+---
+
+## Executive Summary & Key Findings
+
+{% if case.executive_summary %}
 {{ case.executive_summary }}
+{% else %}
+No executive summary has been provided for this case.
+{% endif %}
 
 ### Key Findings Summary
+{% if case.key_findings_summary %}
 {{ case.key_findings_summary }}
+{% else %}
+No key findings summary has been supplied for this case.
+{% endif %}
+
+{{ case.findings_chart | safe }}
 
 ---
 
-## Investigator Profile
+## Intelligence Tools & Methodology
 
-**Lead Investigator:** {{ investigator.name }}  
-{% if investigator.title %}**Title / Designation:** {{ investigator.title }}<br>{% endif %}
-
-{{ investigator.description }}
-
----
-## Methodology & Intelligence Tools
-
-The following specialized open-source intelligence platforms, collection frameworks, and verification tools were utilized during this assessment:
+The following platforms, collection frameworks, and verification tools were used during this assessment:
 
 {% if case.tools_used_table %}{{ case.tools_used_table | safe }}{% else %}{{ case.tools_used | safe }}{% endif %}
 
 ---
-<div style="page-break-before: always;"></div>
 
-## Scope & Legitimate Interest
-
-**Target Scope:**  
-{{ case.target_scope }}
-
-**Legitimate Interest / Legal Basis:**  
-{{ case.legitimate_interest }}
-
----
-
-## Case Subjects
+## Subjects & Relevant Subject Findings
 
 {% if subjects %}
 {% for subject in subjects %}
 ### {{ subject.display_name }}{% if subject.subject_type %} ({{ subject.subject_type }}){% endif %}
 
-**Relationship to Case:** {{ subject.relationship_to_case }}
-**Details:**
+- **Relationship to Case:** {{ subject.relationship_to_case }}
+- **Principal Subject Priority:** {% if subject.relationship_to_case == 'Principal Subject' %}Primary{% else %}Secondary{% endif %}
+
 {% if subject.summary_lines %}
+**Subject Details:**
 {% for label, value in subject.summary_lines %}
 - **{{ label }}:** {{ value }}
 {% endfor %}
 {% endif %}
+
 {% if subject.findings %}
-**Linked Findings:**
+**Relevant Subject Findings:**
 {% for finding in subject.findings %}
-- {{ finding.title }}{% if finding.risk_level %} ({{ finding.risk_level }}){% endif %}{% if finding.confidence_level %} ({{ finding.confidence_level }}){% endif %}
+- **{{ finding.title }}**{% if finding.risk_level %} — {{ finding.risk_level }}{% endif %}{% if finding.confidence_level %} — {{ finding.confidence_level }}{% endif %}
 {% endfor %}
+{% else %}
+No linked findings recorded for this subject.
 {% endif %}
 
 {% endfor %}
 {% else %}
-No subjects recorded for this case.
+No subjects have been recorded for this case.
 {% endif %}
 
 ---
 
-## Intelligence Findings Overview
-
-{{ case.findings_chart | safe }}
-
-{% if case.findings_table %}{{ case.findings_table | safe }}{% else %}{{ findings_table | safe }}{% endif %}
-
----
-
-<div style="page-break-before: always;"></div>
-
-## Detailed Findings & Intelligence Analysis
+## General Findings & Intelligence Analysis
 
 {% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}
