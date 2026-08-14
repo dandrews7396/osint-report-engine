@@ -4,7 +4,7 @@ import re
 import time
 import streamlit as st
 
-DB_PATH = 'data/kairos_osint.db'
+DB_PATH = 'data/osint.db'
 
 
 def normalize_username(username: str) -> str:
