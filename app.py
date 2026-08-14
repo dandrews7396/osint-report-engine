@@ -1,6 +1,16 @@
+from pathlib import Path
+
 import streamlit as st
 
-st.set_page_config(page_title="OSINT Intelligence Engine", page_icon="assets/DIILogo.png", layout="wide")
+_PAGE_CONFIG = {
+    "page_title": "OSINT Intelligence Engine",
+    "layout": "wide",
+}
+_OPTIONAL_LOGO_PATH = Path("assets/logo.png")
+if _OPTIONAL_LOGO_PATH.exists():
+    _PAGE_CONFIG["page_icon"] = str(_OPTIONAL_LOGO_PATH)
+
+st.set_page_config(**_PAGE_CONFIG)
 
 hide_streamlit_style = """
 <style>
