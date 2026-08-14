@@ -2,7 +2,6 @@ import streamlit as st
 
 from database import operations as db
 from database.subjects import (
-    SUBJECT_RELATIONSHIP_OPTIONS,
     get_subject_schema,
     get_subject_type_choices,
     normalize_subject_data,
@@ -14,6 +13,9 @@ try:
 except AttributeError:
     def fragment(func):
         return func
+
+
+PRINCIPAL_SUBJECT_RELATIONSHIP = "Principal Subject"
 
 
 @st.dialog("Confirm Subject Deletion")
@@ -58,6 +60,20 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
 
 def _subject_label(subject: dict) -> str:
     return f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} (Case link: {subject['relationship_to_case']})"
+
+
+def _relationship_option_map(subjects: list[dict], current_subject_id: int | None = None, current_value: str = "") -> dict[str, str]:
+    options = {"Principal Subject": PRINCIPAL_SUBJECT_RELATIONSHIP}
+    for subject in subjects:
+        if current_subject_id is not None and subject["id"] == current_subject_id:
+            continue
+        label = f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']}"
+        options[label] = subject["display_name"]
+
+    normalized_current_value = (current_value or "").strip()
+    if normalized_current_value and normalized_current_value not in options.values():
+        options[f"{normalized_current_value} (current value)"] = normalized_current_value
+    return options
 
 
 def show_manage_subjects():
@@ -121,9 +137,20 @@ def show_manage_subjects():
                         relationship_key = _subject_editor_key(subject['id'], "relationship", "edit_subject")
                         type_key = _subject_editor_key(subject['id'], "type", "edit_subject")
                         notes_key = _subject_editor_key(subject['id'], "notes", "edit_subject")
+                        relationship_options = _relationship_option_map(
+                            subjects,
+                            current_subject_id=subject['id'],
+                            current_value=subject.get('relationship_to_case', ''),
+                        )
+                        relationship_option_labels = list(relationship_options.keys())
+                        current_relationship_value = subject.get('relationship_to_case', PRINCIPAL_SUBJECT_RELATIONSHIP)
+                        relationship_label = next(
+                            (label for label, value in relationship_options.items() if value == current_relationship_value),
+                            relationship_option_labels[0],
+                        )
 
                         st.session_state.setdefault(display_key, subject.get('display_name', ''))
-                        st.session_state.setdefault(relationship_key, subject.get('relationship_to_case', SUBJECT_RELATIONSHIP_OPTIONS[0]))
+                        st.session_state.setdefault(relationship_key, relationship_label)
                         st.session_state.setdefault(type_key, subject.get('subject_type', get_subject_type_choices()[0]))
                         st.session_state.setdefault(notes_key, subject.get('notes', ''))
 
@@ -140,7 +167,7 @@ def show_manage_subjects():
                             )
                             e_relationship = st.selectbox(
                                 "Relationship to Case",
-                                SUBJECT_RELATIONSHIP_OPTIONS,
+                                relationship_option_labels,
                                 key=relationship_key,
                             )
                             e_data = _render_subject_fields(subject['id'], e_type, subject.get('subject_data', {}), "edit_subject")
@@ -156,7 +183,7 @@ def show_manage_subjects():
                                 db.update_case_subject(
                                     subject['id'],
                                     e_type,
-                                    e_relationship,
+                                    relationship_options[e_relationship],
                                     display_name,
                                     cleaned_data,
                                     e_notes,
@@ -176,9 +203,11 @@ def show_manage_subjects():
         st.divider()
         st.subheader("Add New Subject")
         st.session_state.setdefault("new_subject_display_name", "")
-        st.session_state.setdefault("new_subject_relationship", SUBJECT_RELATIONSHIP_OPTIONS[0])
         st.session_state.setdefault("new_subject_type", get_subject_type_choices()[0])
         st.session_state.setdefault("new_subject_notes", "")
+        new_relationship_options = _relationship_option_map(subjects)
+        new_relationship_option_labels = list(new_relationship_options.keys())
+        st.session_state.setdefault("new_subject_relationship", new_relationship_option_labels[0])
 
         new_type = st.selectbox(
             "Subject Type",
@@ -194,7 +223,7 @@ def show_manage_subjects():
             )
             new_relationship = col2.selectbox(
                 "Relationship to Case",
-                SUBJECT_RELATIONSHIP_OPTIONS,
+                new_relationship_option_labels,
                 key="new_subject_relationship",
             )
             new_data = _render_subject_fields("new", new_type, {}, "new_subject")
@@ -210,7 +239,7 @@ def show_manage_subjects():
                 new_id = db.add_case_subject(
                     case_id,
                     new_type,
-                    new_relationship,
+                    new_relationship_options[new_relationship],
                     display_name,
                     cleaned_data,
                     new_notes,
