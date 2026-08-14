@@ -129,6 +129,7 @@ def init_db():
                 legitimate_interest_assessment TEXT,
                 executive_assessment TEXT,
                 key_findings_summary TEXT,
+                covert_persona_reference TEXT,
                 tools_and_sources_used TEXT,
                 deleted_at TEXT,
                 FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE CASCADE
@@ -184,6 +185,7 @@ def init_db():
             )
         ''')
 
+        _ensure_column(cursor, "cases", "covert_persona_reference", "TEXT")
         _ensure_column(cursor, "case_findings", "subject_id", "INTEGER")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_case_subjects_case_id ON case_subjects (case_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_case_findings_subject_id ON case_findings (subject_id)")

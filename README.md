@@ -6,12 +6,12 @@ You should only run this application locally or on a trusted, secure network. **
 This is open source and free. Do not contact me if you can't get it working, I don't have time to provide support for this. Review the code, and open a PR. I do not provide support. Use at your own risk, no warranty
 
 ## Osint Report Engine
-Osint Report Engine is a web application designed to streamline OSINT research project management, findings tracking, and automated report generation. 
+Osint Report Engine is a web application designed to streamline OSINT research case management, subject and findings tracking, and automated report generation. 
 
 It provides a centralized dashboard to track clients, manage cases across various domain categories (e.g., Corporate Governance, Infrastructure, Dark Web), maintain a global risk library, and automatically generate professional, well-formatted PDF reports and Attestation Letters.
 
 #### Note from Dan
-This project was forked and refactored from the kairos-reporting-engine. All kudos should go to Tyler for Open Sourcing an awesome tool. I plan to actively use this for research at my day job. Where possible, I will attempt to integrate new features that Tyler releases for his project, and some of my own as I identify anything useful. If you have any ideas, open an "Issue" with a feature request and I'll consider adding it. 
+This project was forked and refactored from the kairos-reporting-engine. All kudos should go to Tyler for Open Sourcing an awesome tool. I plan to actively use this for research at my day job. Where possible, I will attempt to integrate new features that Tyler releases for his project, and some of my own as I identify anything useful. If you have any ideas, open an "Issue" with a feature request and we can take a look at implementing it. 
 
 ## Key Features
 
@@ -22,6 +22,13 @@ This project was forked and refactored from the kairos-reporting-engine. All kud
 - **Secure Authentication**: Built-in User Management, Passphrase Hashing (Argon2), and Multi-Factor Authentication (TOTP via Google Authenticator/Authy).
 - **Risk Library**: Maintain a global library of common vulnerabilities with support for bulk CSV import/export.
 - **Production Ready**: Ships with a utility to generate SSL certificates and runs securely on HTTPS port 443 with Streamlit telemetry and dev tools disabled.
+
+## TODO:
+
+- **Finding Imports**: Import findings via CSV (i.e: from tools like OSINT Industries)
+- **Roles**: Implement RBAC for managers, supervisors, operatives (possibly clients)
+- **Disclosure**: Attestation letters aren't really used in OSINT, but a Disclosure Report will make cases court ready
+
 
 ## Prerequisites
 
@@ -96,7 +103,7 @@ docker compose up -d
 To quickly set up and launch the application from scratch, you can copy and paste this entire block into your terminal (assuming you have the prerequisites installed):
 
 ```bash
-git clone https://github.com/TeneBrae93/osint-report-engine.git
+git clone https://github.com/dandrews7396/osint-report-engine.git
 cd osint-report-engine
 python3 -m venv .venv
 source .venv/bin/activate
@@ -149,7 +156,6 @@ This will start the local Streamlit server. Navigate your web browser to `https:
 - `data/`: The default directory where the SQLite database (`osint.db`) and temporary files are stored.
 - `reports/`: The default directory where generated PDF reports are saved.
 - `certs/`: Directory containing your SSL certificates for HTTPS access.
-- `.streamlit/`: Contains the configuration file to enforce port 443 and disable Streamlit analytics.
 
 ## Database Note
 

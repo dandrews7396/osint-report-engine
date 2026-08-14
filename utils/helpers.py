@@ -15,7 +15,7 @@ RICH_TEXT_TAGS = {
 RICH_TEXT_ATTRIBUTES = {
     '*': {'class', 'title'},
     'a': {'href', 'target', 'title'},
-    'img': {'src', 'alt', 'title', 'width', 'height'},
+    'img': {'src', 'alt', 'title'},
     'ol': {'start', 'type'},
     'li': {'value'},
     'td': {'colspan', 'rowspan'},

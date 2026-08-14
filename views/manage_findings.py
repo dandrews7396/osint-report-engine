@@ -44,6 +44,7 @@ def show_manage_findings():
         st.session_state.manage_findings_case_id = case_id
         active_case = next((c for c in cases if c['id'] == case_id), None)
         subjects = db.get_case_subjects(case_id)
+        edit_finding_id = st.session_state.get('edit_finding_id')
         subject_options = {"No Subject Linked": None}
         for subject in subjects:
             subject_options[f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} — {subject['relationship_to_case']}"] = subject['id']
@@ -73,11 +74,16 @@ def show_manage_findings():
                 return
 
             for f in findings:
-                is_expanded = st.session_state.get('edit_finding_id') == f['id']
-                with st.expander(
-                    f"[{f.get('risk_level', 'Unspecified')}] [{f.get('confidence_level', 'Unspecified')}] {f.get('title', 'Untitled')} ({f.get('category', 'General')})",
-                    expanded=is_expanded,
-                ):
+                is_expanded = edit_finding_id == f['id']
+                finding_label = f"[{f.get('risk_level', 'Unspecified')}] [{f.get('confidence_level', 'Unspecified')}] {f.get('title', 'Untitled')} ({f.get('category', 'General')})"
+                if is_expanded:
+                    st.markdown(f"#### {finding_label}")
+                    st.caption("Editing is locked open until you save or cancel.")
+                    item_container = st.container()
+                else:
+                    item_container = st.expander(finding_label)
+
+                with item_container:
                     if f.get('subject_name'):
                         st.caption(f"Linked subject: {f['subject_name']}")
                     if is_expanded:
@@ -253,7 +259,8 @@ def show_manage_findings():
                     st.rerun()
 
         render_findings_list()
-        render_findings_import()
-        render_findings_add_form()
+        if edit_finding_id is None:
+            render_findings_import()
+            render_findings_add_form()
 
     render_findings_page()
