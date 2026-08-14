@@ -7,8 +7,15 @@ def show_admin_users():
     @st.fragment
     def render_admin_page():
         admin_user = require_admin_page_auth()
+        if st.session_state.pop("admin_clear_create_user_fields", False):
+            st.session_state["admin_new_username"] = ""
+            st.session_state["admin_new_user_passphrase"] = ""
+            st.session_state["admin_create_user_password"] = ""
+
         st.title("User Management")
         st.write("Create additional non-administrator accounts for your team.")
+        if success_message := st.session_state.pop("admin_create_user_success", None):
+            st.success(success_message)
 
         admin_pw = st.text_input("Your Current Password (Admin)", type="password", key="admin_create_user_password")
         st.divider()
@@ -40,10 +47,9 @@ def show_admin_users():
                     try:
                         hash_pw = ph.hash(password)
                         add_user(normalized_username, hash_pw, created_by_username=admin_user['username'])
-                        st.success(f"User {normalized_username} created!")
-                        st.session_state["admin_new_username"] = ""
-                        st.session_state["admin_new_user_passphrase"] = ""
-                        st.session_state["admin_create_user_password"] = ""
+                        st.session_state["admin_create_user_success"] = f"User {normalized_username} created!"
+                        st.session_state["admin_clear_create_user_fields"] = True
+                        st.rerun()
                     except PermissionError as e:
                         st.error(str(e))
                     except ValueError as e:
