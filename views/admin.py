@@ -1,5 +1,5 @@
 import streamlit as st
-from database.db import add_user, get_user
+from database.db import add_user, get_user, get_users, normalize_username, update_user_password, validate_username
 from argon2.exceptions import VerifyMismatchError
 from utils.auth import ph, require_admin_page_auth
 
@@ -10,27 +10,73 @@ def show_admin_users():
         st.title("User Management")
         st.write("Create additional non-administrator accounts for your team.")
 
-        with st.form("add_user_form", clear_on_submit=True):
-            admin_pw = st.text_input("Your Current Password (Admin)", type="password")
-            st.divider()
-            username = st.text_input("New Username")
-            password = st.text_input("New User Passphrase", type="password")
+        admin_pw = st.text_input("Your Current Password (Admin)", type="password", key="admin_create_user_password")
+        st.divider()
+        username = st.text_input(
+            "New Username",
+            key="admin_new_username",
+            help="3-12 letters only. Usernames are saved in lowercase.",
+        )
+        normalized_username = normalize_username(username)
+        username_error = validate_username(normalized_username) if username else None
+        st.caption("Usernames must be 3-12 letters only and are saved in lowercase.")
+        if username:
+            if username_error:
+                st.warning(username_error)
+            else:
+                st.success(f"Username will be saved as '{normalized_username}'.")
 
-            if st.form_submit_button("Create User"):
+        password = st.text_input("New User Passphrase", type="password", key="admin_new_user_passphrase")
+
+        if st.button("Create User", key="admin_create_user_submit"):
+            user = get_user(admin_user['username'])
+            try:
+                ph.verify(user['password_hash'], admin_pw)
+                if username_error:
+                    st.error(username_error)
+                elif len(password) < 12:
+                    st.error("Passphrase must be at least 12 characters.")
+                else:
+                    try:
+                        hash_pw = ph.hash(password)
+                        add_user(normalized_username, hash_pw, created_by_username=admin_user['username'])
+                        st.success(f"User {normalized_username} created!")
+                        st.session_state["admin_new_username"] = ""
+                        st.session_state["admin_new_user_passphrase"] = ""
+                        st.session_state["admin_create_user_password"] = ""
+                    except PermissionError as e:
+                        st.error(str(e))
+                    except ValueError as e:
+                        st.error(str(e))
+            except VerifyMismatchError:
+                st.error("Incorrect admin password.")
+
+        st.divider()
+        st.subheader("Reset User Password")
+        manageable_users = [user for user in get_users() if user["username"] != admin_user["username"]]
+        if not manageable_users:
+            st.info("No additional user accounts are available for password reset.")
+            return
+
+        user_options = {user["username"]: user["username"] for user in manageable_users}
+        with st.form("reset_user_password_form", clear_on_submit=True):
+            target_username = st.selectbox("User to Reset", list(user_options.keys()))
+            admin_reset_pw = st.text_input("Your Current Password (Admin)", type="password", key="reset_admin_pw")
+            new_password = st.text_input("New User Passphrase", type="password", key="reset_new_pw")
+            confirm_password = st.text_input("Confirm New User Passphrase", type="password", key="reset_confirm_pw")
+
+            if st.form_submit_button("Reset Password"):
                 user = get_user(admin_user['username'])
                 try:
-                    ph.verify(user['password_hash'], admin_pw)
-                    if len(password) < 12:
+                    ph.verify(user['password_hash'], admin_reset_pw)
+                    if len(new_password) < 12:
                         st.error("Passphrase must be at least 12 characters.")
+                    elif new_password != confirm_password:
+                        st.error("Passphrases do not match.")
                     else:
-                        try:
-                            hash_pw = ph.hash(password)
-                            add_user(username, hash_pw, created_by_username=admin_user['username'])
-                            st.success(f"User {username} created!")
-                        except PermissionError as e:
-                            st.error(str(e))
-                        except ValueError as e:
-                            st.error(str(e))
+                        new_hash = ph.hash(new_password)
+                        update_user_password(target_username, new_hash)
+                        st.success(f"Password reset for {target_username}.")
                 except VerifyMismatchError:
                     st.error("Incorrect admin password.")
 

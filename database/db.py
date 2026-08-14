@@ -1,9 +1,23 @@
 import sqlite3
 import os
+import re
 import time
 import streamlit as st
 
 DB_PATH = 'data/kairos_osint.db'
+
+
+def normalize_username(username: str) -> str:
+    return (username or '').strip().lower()
+
+
+def validate_username(username: str) -> str | None:
+    normalized_username = normalize_username(username)
+    if not normalized_username:
+        return "Username is required."
+    if not re.fullmatch(r"[a-z]{3,12}", normalized_username):
+        return "Username must be 3-12 letters long and contain letters only."
+    return None
 
 def get_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -39,6 +53,20 @@ def init_db():
             )
         ''')
         _ensure_column(cursor, "users", "is_admin", "BOOLEAN DEFAULT 0")
+        cursor.execute("""
+            SELECT LOWER(username) AS normalized_username
+            FROM users
+            GROUP BY LOWER(username)
+            HAVING COUNT(*) > 1
+        """)
+        conflicting_usernames = [row["normalized_username"] for row in cursor.fetchall()]
+        if conflicting_usernames:
+            joined = ", ".join(conflicting_usernames)
+            raise RuntimeError(
+                f"Database initialization failed: duplicate usernames collide when lowercased ({joined})."
+            )
+        cursor.execute("UPDATE users SET username = LOWER(TRIM(username)) WHERE username != LOWER(TRIM(username))")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users(username COLLATE NOCASE)")
         cursor.execute("SELECT COUNT(*) FROM users WHERE COALESCE(is_admin, 0) = 1")
         admin_count = cursor.fetchone()[0]
         if admin_count == 0:
@@ -193,6 +221,12 @@ def get_user_count():
 def add_user(username, password_hash, *, created_by_username: str | None = None, is_admin: bool = False):
     conn = get_connection()
     try:
+        normalized_username = normalize_username(username)
+        normalized_creator = normalize_username(created_by_username) if created_by_username is not None else None
+        username_error = validate_username(normalized_username)
+        if username_error:
+            raise ValueError(username_error)
+
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM users")
         existing_user_count = cursor.fetchone()[0]
@@ -200,10 +234,10 @@ def add_user(username, password_hash, *, created_by_username: str | None = None,
         if existing_user_count == 0:
             is_admin = True
         else:
-            if created_by_username is None:
+            if normalized_creator is None:
                 raise PermissionError("Only the initial administrator can create additional users.")
 
-            cursor.execute("SELECT is_admin FROM users WHERE username = ?", (created_by_username,))
+            cursor.execute("SELECT is_admin FROM users WHERE username = ?", (normalized_creator,))
             creator = cursor.fetchone()
             if not creator or not bool(creator["is_admin"]):
                 raise PermissionError("Only the initial administrator can create additional users.")
@@ -212,7 +246,7 @@ def add_user(username, password_hash, *, created_by_username: str | None = None,
 
         cursor.execute(
             "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)",
-            (username, password_hash, 1 if is_admin else 0),
+            (normalized_username, password_hash, 1 if is_admin else 0),
         )
         conn.commit()
         _clear_read_caches()
@@ -229,8 +263,11 @@ def add_user(username, password_hash, *, created_by_username: str | None = None,
 def get_user(username):
     conn = get_connection()
     try:
+        normalized_username = normalize_username(username)
+        if not normalized_username:
+            return None
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        cursor.execute("SELECT * FROM users WHERE username = ?", (normalized_username,))
         row = cursor.fetchone()
         return dict(row) if row else None
     except sqlite3.Error as e:
@@ -242,8 +279,12 @@ def get_user(username):
 def update_user_mfa(username, mfa_secret, mfa_enabled):
     conn = get_connection()
     try:
+        normalized_username = normalize_username(username)
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET mfa_secret = ?, mfa_enabled = ? WHERE username = ?", (mfa_secret, mfa_enabled, username))
+        cursor.execute(
+            "UPDATE users SET mfa_secret = ?, mfa_enabled = ? WHERE username = ?",
+            (mfa_secret, mfa_enabled, normalized_username),
+        )
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -255,8 +296,9 @@ def update_user_mfa(username, mfa_secret, mfa_enabled):
 def update_user_password(username, new_password_hash):
     conn = get_connection()
     try:
+        normalized_username = normalize_username(username)
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (new_password_hash, username))
+        cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (new_password_hash, normalized_username))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -268,6 +310,9 @@ def update_user_password(username, new_password_hash):
 def record_failed_login(username):
     conn = get_connection()
     try:
+        normalized_username = normalize_username(username)
+        if not normalized_username:
+            return
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO login_attempts (username, failed_attempts, last_attempt) 
@@ -275,7 +320,7 @@ def record_failed_login(username):
             ON CONFLICT(username) DO UPDATE SET 
                 failed_attempts = failed_attempts + 1, 
                 last_attempt = ?
-        ''', (username, time.time(), time.time()))
+        ''', (normalized_username, time.time(), time.time()))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -287,8 +332,9 @@ def record_failed_login(username):
 def reset_failed_logins(username):
     conn = get_connection()
     try:
+        normalized_username = normalize_username(username)
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
+        cursor.execute("DELETE FROM login_attempts WHERE username = ?", (normalized_username,))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -301,13 +347,30 @@ def reset_failed_logins(username):
 def get_failed_logins(username):
     conn = get_connection()
     try:
+        normalized_username = normalize_username(username)
+        if not normalized_username:
+            return 0
         cursor = conn.cursor()
-        cursor.execute("SELECT failed_attempts FROM login_attempts WHERE username = ?", (username,))
+        cursor.execute("SELECT failed_attempts FROM login_attempts WHERE username = ?", (normalized_username,))
         row = cursor.fetchone()
         return row['failed_attempts'] if row else 0
     except sqlite3.Error as e:
         print(f"[DB ERROR] get_failed_logins: {e}")
         return 0
+    finally:
+        conn.close()
+
+
+@st.cache_data(show_spinner=False)
+def get_users() -> list[dict]:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, is_admin, mfa_enabled FROM users ORDER BY username ASC")
+        return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"[DB ERROR] get_users: {e}")
+        return []
     finally:
         conn.close()
 

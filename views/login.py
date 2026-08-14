@@ -4,7 +4,7 @@ import pyotp
 import random
 import string
 from captcha.image import ImageCaptcha
-from database.db import get_user, record_failed_login, reset_failed_logins, get_failed_logins
+from database.db import get_user, record_failed_login, reset_failed_logins, get_failed_logins, normalize_username
 from utils.auth import ph, get_cookie_controller, sign_token, hydrate_authenticated_session
 
 _HIDE_SIDEBAR_STYLE = """
@@ -52,31 +52,32 @@ def show_login():
         return
 
     with st.form("login_form"):
-        username = st.text_input("Username")
+        username_input = st.text_input("Username")
         password = st.text_input("Passphrase", type="password")
+        normalized_username = normalize_username(username_input)
         
-        needs_captcha = (st.session_state.get('captcha_required_for') == username) and username != ""
+        needs_captcha = (st.session_state.get('captcha_required_for') == normalized_username) and normalized_username != ""
         captcha_input = ""
         if needs_captcha:
-            if 'captcha_text' not in st.session_state or st.session_state.get('captcha_target') != username:
+            if 'captcha_text' not in st.session_state or st.session_state.get('captcha_target') != normalized_username:
                 image = ImageCaptcha(width=280, height=90)
                 text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
                 st.session_state.captcha_text = text
-                st.session_state.captcha_target = username
+                st.session_state.captcha_target = normalized_username
                 st.session_state.captcha_image = image.generate(text).getvalue()
             
             st.image(st.session_state.captcha_image)
             captcha_input = st.text_input("Enter CAPTCHA above")
             
         if st.form_submit_button("Login"):
-            if not username:
+            if not normalized_username:
                 st.error("Please enter a username.")
                 st.rerun()
                 
-            failed_attempts = get_failed_logins(username)
+            failed_attempts = get_failed_logins(normalized_username)
             if failed_attempts >= 2:
-                if st.session_state.get('captcha_required_for') != username:
-                    st.session_state.captcha_required_for = username
+                if st.session_state.get('captcha_required_for') != normalized_username:
+                    st.session_state.captcha_required_for = normalized_username
                     if 'captcha_text' in st.session_state:
                         del st.session_state['captcha_text']
                     st.error("Too many failed attempts. Please solve the CAPTCHA.")
@@ -88,13 +89,13 @@ def show_login():
                         st.error("Invalid CAPTCHA.")
                         st.rerun()
             
-            user = get_user(username)
+            user = get_user(normalized_username)
             if not user:
                 try:
                     ph.verify(_DUMMY_HASH, password)
                 except Exception:
                     pass
-                record_failed_login(username)
+                record_failed_login(normalized_username)
                 if 'captcha_text' in st.session_state:
                     del st.session_state['captcha_text']
                 st.error("Invalid username or password.")
@@ -103,19 +104,19 @@ def show_login():
                 try:
                     ph.verify(user['password_hash'], password)
                     if user['mfa_enabled']:
-                        st.session_state.mfa_user = username
+                        st.session_state.mfa_user = normalized_username
                         st.rerun()
                     else:
-                        reset_failed_logins(username)
+                        reset_failed_logins(normalized_username)
                         if 'captcha_required_for' in st.session_state:
                             del st.session_state['captcha_required_for']
                         if 'captcha_text' in st.session_state:
                             del st.session_state['captcha_text']
-                        hydrate_authenticated_session(username)
-                        get_cookie_controller().set('kairos_auth_token', sign_token(username), max_age=6*3600)
+                        hydrate_authenticated_session(normalized_username)
+                        get_cookie_controller().set('kairos_auth_token', sign_token(normalized_username), max_age=6*3600)
                         st.rerun()
                 except Exception:
-                    record_failed_login(username)
+                    record_failed_login(normalized_username)
                     if 'captcha_text' in st.session_state:
                         del st.session_state['captcha_text']
                     st.error("Invalid username or password.")
