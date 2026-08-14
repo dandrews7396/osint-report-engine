@@ -307,6 +307,32 @@ def update_user_password(username, new_password_hash):
     finally:
         conn.close()
 
+
+def delete_user(username):
+    conn = get_connection()
+    try:
+        normalized_username = normalize_username(username)
+        if not normalized_username:
+            raise ValueError("Username is required.")
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT is_admin FROM users WHERE username = ?", (normalized_username,))
+        user = cursor.fetchone()
+        if not user:
+            raise ValueError("User not found.")
+        if bool(user["is_admin"]):
+            raise PermissionError("Administrator accounts cannot be deleted.")
+
+        cursor.execute("DELETE FROM login_attempts WHERE username = ?", (normalized_username,))
+        cursor.execute("DELETE FROM users WHERE username = ?", (normalized_username,))
+        conn.commit()
+        _clear_read_caches()
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Database error while deleting user: {e}")
+    finally:
+        conn.close()
+
 def record_failed_login(username):
     conn = get_connection()
     try:

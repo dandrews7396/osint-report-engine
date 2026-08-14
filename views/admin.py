@@ -1,5 +1,5 @@
 import streamlit as st
-from database.db import add_user, get_user, get_users, normalize_username, update_user_password, validate_username
+from database.db import add_user, delete_user, get_user, get_users, normalize_username, update_user_password, validate_username
 from argon2.exceptions import VerifyMismatchError
 from utils.auth import ph, require_admin_page_auth
 
@@ -78,22 +78,38 @@ def show_admin_users():
                 type="password",
                 key="admin_reset_user_passphrase_confirm",
             )
+            action_col, delete_col = st.columns(2)
 
-            if st.button("Update Password", key="admin_update_user_password_submit"):
-                user = get_user(admin_user['username'])
-                try:
-                    ph.verify(user['password_hash'], admin_pw)
-                    if len(new_password) < 12:
-                        st.error("Passphrase must be at least 12 characters.")
-                    elif new_password != confirm_password:
-                        st.error("Passphrases do not match.")
-                    else:
-                        new_hash = ph.hash(new_password)
-                        update_user_password(target_username, new_hash)
-                        st.session_state["admin_create_user_success"] = f"Password reset for {target_username}."
+            with action_col:
+                if st.button("Update Password", key="admin_update_user_password_submit", use_container_width=True):
+                    user = get_user(admin_user['username'])
+                    try:
+                        ph.verify(user['password_hash'], admin_pw)
+                        if len(new_password) < 12:
+                            st.error("Passphrase must be at least 12 characters.")
+                        elif new_password != confirm_password:
+                            st.error("Passphrases do not match.")
+                        else:
+                            new_hash = ph.hash(new_password)
+                            update_user_password(target_username, new_hash)
+                            st.session_state["admin_create_user_success"] = f"Password reset for {target_username}."
+                            st.session_state["admin_clear_fields_mode"] = "update"
+                            st.rerun()
+                    except VerifyMismatchError:
+                        st.error("Incorrect admin password.")
+
+            with delete_col:
+                if st.button("Delete User", key="admin_delete_user_submit", use_container_width=True):
+                    user = get_user(admin_user['username'])
+                    try:
+                        ph.verify(user['password_hash'], admin_pw)
+                        delete_user(target_username)
+                        st.session_state["admin_create_user_success"] = f"User {target_username} deleted."
                         st.session_state["admin_clear_fields_mode"] = "update"
                         st.rerun()
-                except VerifyMismatchError:
-                    st.error("Incorrect admin password.")
+                    except VerifyMismatchError:
+                        st.error("Incorrect admin password.")
+                    except (PermissionError, RuntimeError, ValueError) as e:
+                        st.error(str(e))
 
     render_admin_page()
