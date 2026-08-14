@@ -120,6 +120,7 @@ def show_manage_subjects():
         st.session_state.manage_subjects_case_id = case_id
 
         subjects = db.get_case_subjects(case_id)
+        edit_subject_id = st.session_state.get('edit_subject_id')
         st.subheader("Current Case Subjects")
         st.caption(f"{len(subjects)} subject(s) on this case")
         st.caption("Internal notes are excluded from generated reports. Use the dedicated notes field only for case-only working notes.")
@@ -128,11 +129,11 @@ def show_manage_subjects():
             st.info("No subjects added to this case yet.")
         else:
             for subject in subjects:
-                is_expanded = st.session_state.get('edit_subject_id') == subject['id']
-                with st.expander(_subject_label(subject), expanded=is_expanded):
+                is_editing = edit_subject_id == subject['id']
+                with st.expander(_subject_label(subject), expanded=is_editing):
                     st.caption(f"Linked findings: {subject.get('finding_count', 0)}")
 
-                    if is_expanded:
+                    if is_editing:
                         display_key = _subject_editor_key(subject['id'], "display_name", "edit_subject")
                         relationship_key = _subject_editor_key(subject['id'], "relationship", "edit_subject")
                         type_key = _subject_editor_key(subject['id'], "type", "edit_subject")
@@ -193,60 +194,69 @@ def show_manage_subjects():
                                 st.success("Subject updated.")
                                 st.rerun()
 
-                    col1, col2 = st.columns(2)
-                    if col1.button("Edit Subject", key=f"edit_subject_btn_{subject['id']}"):
-                        st.session_state.edit_subject_id = subject['id']
-                        st.rerun()
-                    if col2.button("Delete Subject", key=f"delete_subject_btn_{subject['id']}"):
-                        delete_subject_dialog(subject['id'], subject['display_name'])
+                        if st.button("Cancel Edit", key=f"cancel_subject_{subject['id']}"):
+                            st.session_state.edit_subject_id = None
+                            _clear_subject_widget_state(subject['id'], "edit_subject")
+                            st.rerun()
+                    else:
+                        if subject.get('notes'):
+                            st.write(f"**Internal Notes:** {subject['notes']}")
 
-        st.divider()
-        st.subheader("Add New Subject")
-        st.session_state.setdefault("new_subject_display_name", "")
-        st.session_state.setdefault("new_subject_type", get_subject_type_choices()[0])
-        st.session_state.setdefault("new_subject_notes", "")
-        new_relationship_options = _relationship_option_map(subjects)
-        new_relationship_option_labels = list(new_relationship_options.keys())
-        st.session_state.setdefault("new_subject_relationship", new_relationship_option_labels[0])
+                        col1, col2 = st.columns(2)
+                        if col1.button("Edit Subject", key=f"edit_subject_btn_{subject['id']}", use_container_width=True):
+                            st.session_state.edit_subject_id = subject['id']
+                            st.rerun()
+                        if col2.button("Delete Subject", key=f"delete_subject_btn_{subject['id']}", use_container_width=True):
+                            delete_subject_dialog(subject['id'], subject['display_name'])
 
-        new_type = st.selectbox(
-            "Subject Type",
-            get_subject_type_choices(),
-            key="new_subject_type",
-        )
-        with st.form("add_subject"):
-            col1, col2 = st.columns(2)
-            new_display_name = col1.text_input(
-                "Display Name",
-                help="Used in case lists and reports.",
-                key="new_subject_display_name",
-            )
-            new_relationship = col2.selectbox(
-                "Relationship to Case",
-                new_relationship_option_labels,
-                key="new_subject_relationship",
-            )
-            new_data = _render_subject_fields("new", new_type, {}, "new_subject")
-            new_notes = st.text_area(
-                "Notes (these will not appear in a generated report)",
-                key="new_subject_notes",
-                help="Internal-only notes for case management. They are not included in generated reports.",
-            )
+        if edit_subject_id is None:
+            st.divider()
+            st.subheader("Add New Subject")
+            st.session_state.setdefault("new_subject_display_name", "")
+            st.session_state.setdefault("new_subject_type", get_subject_type_choices()[0])
+            st.session_state.setdefault("new_subject_notes", "")
+            new_relationship_options = _relationship_option_map(subjects)
+            new_relationship_option_labels = list(new_relationship_options.keys())
+            st.session_state.setdefault("new_subject_relationship", new_relationship_option_labels[0])
 
-            if st.form_submit_button("Add Subject"):
-                cleaned_data = {k: (v or "").strip() for k, v in new_data.items()}
-                display_name = new_display_name.strip() or subject_display_name(new_type, cleaned_data)
-                new_id = db.add_case_subject(
-                    case_id,
-                    new_type,
-                    new_relationship_options[new_relationship],
-                    display_name,
-                    cleaned_data,
-                    new_notes,
+            new_type = st.selectbox(
+                "Subject Type",
+                get_subject_type_choices(),
+                key="new_subject_type",
+            )
+            with st.form("add_subject"):
+                col1, col2 = st.columns(2)
+                new_display_name = col1.text_input(
+                    "Display Name",
+                    help="Used in case lists and reports.",
+                    key="new_subject_display_name",
                 )
-                st.session_state.edit_subject_id = new_id
-                st.session_state["clear_new_subject_fields"] = True
-                st.success(f"Added subject: {display_name}")
-                st.rerun()
+                new_relationship = col2.selectbox(
+                    "Relationship to Case",
+                    new_relationship_option_labels,
+                    key="new_subject_relationship",
+                )
+                new_data = _render_subject_fields("new", new_type, {}, "new_subject")
+                new_notes = st.text_area(
+                    "Notes (these will not appear in a generated report)",
+                    key="new_subject_notes",
+                    help="Internal-only notes for case management. They are not included in generated reports.",
+                )
+
+                if st.form_submit_button("Add Subject"):
+                    cleaned_data = {k: (v or "").strip() for k, v in new_data.items()}
+                    display_name = new_display_name.strip() or subject_display_name(new_type, cleaned_data)
+                    new_id = db.add_case_subject(
+                        case_id,
+                        new_type,
+                        new_relationship_options[new_relationship],
+                        display_name,
+                        cleaned_data,
+                        new_notes,
+                    )
+                    st.session_state.edit_subject_id = new_id
+                    st.session_state["clear_new_subject_fields"] = True
+                    st.success(f"Added subject: {display_name}")
+                    st.rerun()
 
     render_manage_subjects()

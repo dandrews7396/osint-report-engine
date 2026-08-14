@@ -29,8 +29,6 @@ def show_setup():
     if username:
         if username_error:
             st.warning(username_error)
-        else:
-            st.success(f"Username will be saved as '{normalized_username}'.")
 
     password = st.text_input("Passphrase", type="password", key="setup_admin_password")
     password_confirm = st.text_input("Confirm Passphrase", type="password", key="setup_admin_password_confirm")
