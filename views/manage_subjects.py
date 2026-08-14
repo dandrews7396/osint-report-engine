@@ -63,7 +63,9 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
         if field["kind"] == "textarea":
             values[field["key"]] = st.text_area(field["label"], value=default_value, placeholder=field.get("placeholder", ""), key=key)
         elif field["kind"] == "date":
-            stripped_value = (default_value or "").strip()
+            if isinstance(default_value, date):
+                default_value = default_value.isoformat()
+            stripped_value = default_value.strip() if isinstance(default_value, str) else (default_value or "")
             parsed_date = None
             today = date.today()
             min_value = _years_ago(field["min_years_ago"], today) if field.get("min_years_ago") else None
@@ -85,7 +87,7 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
                 )
                 values[field["key"]] = st.text_input(
                     field["label"],
-                    value=default_value,
+                    value=str(default_value) if default_value is not None else "",
                     placeholder=field.get("placeholder", ""),
                     key=key,
                 )
@@ -98,7 +100,7 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
                     format="YYYY-MM-DD",
                     key=key,
                 )
-                values[field["key"]] = selected_date.isoformat() if selected_date else ""
+                values[field["key"]] = selected_date.isoformat() if isinstance(selected_date, date) else ""
         else:
             values[field["key"]] = st.text_input(field["label"], value=default_value, placeholder=field.get("placeholder", ""), key=key)
     return values
