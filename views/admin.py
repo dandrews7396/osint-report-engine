@@ -7,74 +7,82 @@ def show_admin_users():
     @st.fragment
     def render_admin_page():
         admin_user = require_admin_page_auth()
-        if st.session_state.pop("admin_clear_create_user_fields", False):
+        clear_mode = st.session_state.pop("admin_clear_fields_mode", None)
+        if clear_mode == "create":
             st.session_state["admin_new_username"] = ""
             st.session_state["admin_new_user_passphrase"] = ""
-            st.session_state["admin_create_user_password"] = ""
+            st.session_state["admin_current_password"] = ""
+        elif clear_mode == "update":
+            st.session_state["admin_reset_user_passphrase"] = ""
+            st.session_state["admin_reset_user_passphrase_confirm"] = ""
+            st.session_state["admin_current_password"] = ""
 
         st.title("User Management")
-        st.write("Create additional non-administrator accounts for your team.")
+        st.write("Create additional non-administrator accounts or update an existing user's password.")
         if success_message := st.session_state.pop("admin_create_user_success", None):
             st.success(success_message)
 
-        admin_pw = st.text_input("Your Current Password (Admin)", type="password", key="admin_create_user_password")
-        st.divider()
-        username = st.text_input(
-            "New Username",
-            key="admin_new_username",
-            help="3-12 letters only. Usernames are saved in lowercase.",
-        )
-        normalized_username = normalize_username(username)
-        username_error = validate_username(normalized_username) if username else None
-        st.caption("Usernames must be 3-12 letters only and are saved in lowercase.")
-        if username:
-            if username_error:
-                st.warning(username_error)
-            else:
-                st.success(f"Username will be saved as '{normalized_username}'.")
-
-        password = st.text_input("New User Passphrase", type="password", key="admin_new_user_passphrase")
-
-        if st.button("Create User", key="admin_create_user_submit"):
-            user = get_user(admin_user['username'])
-            try:
-                ph.verify(user['password_hash'], admin_pw)
-                if username_error:
-                    st.error(username_error)
-                elif len(password) < 12:
-                    st.error("Passphrase must be at least 12 characters.")
-                else:
-                    try:
-                        hash_pw = ph.hash(password)
-                        add_user(normalized_username, hash_pw, created_by_username=admin_user['username'])
-                        st.session_state["admin_create_user_success"] = f"User {normalized_username} created!"
-                        st.session_state["admin_clear_create_user_fields"] = True
-                        st.rerun()
-                    except PermissionError as e:
-                        st.error(str(e))
-                    except ValueError as e:
-                        st.error(str(e))
-            except VerifyMismatchError:
-                st.error("Incorrect admin password.")
-
-        st.divider()
-        st.subheader("Reset User Password")
         manageable_users = [user for user in get_users() if user["username"] != admin_user["username"]]
-        if not manageable_users:
-            st.info("No additional user accounts are available for password reset.")
-            return
+        action_options = ["Create New User"]
+        if manageable_users:
+            action_options.append("Update Existing User Password")
 
-        user_options = {user["username"]: user["username"] for user in manageable_users}
-        with st.form("reset_user_password_form", clear_on_submit=True):
-            target_username = st.selectbox("User to Reset", list(user_options.keys()))
-            admin_reset_pw = st.text_input("Your Current Password (Admin)", type="password", key="reset_admin_pw")
-            new_password = st.text_input("New User Passphrase", type="password", key="reset_new_pw")
-            confirm_password = st.text_input("Confirm New User Passphrase", type="password", key="reset_confirm_pw")
+        action = st.selectbox("Action", action_options, key="admin_user_action")
+        admin_pw = st.text_input("Your Current Password (Admin)", type="password", key="admin_current_password")
+        st.divider()
 
-            if st.form_submit_button("Reset Password"):
+        if action == "Create New User":
+            username = st.text_input(
+                "New Username",
+                key="admin_new_username",
+                help="3-12 letters only. Usernames are saved in lowercase.",
+            )
+            normalized_username = normalize_username(username)
+            username_error = validate_username(normalized_username) if username else None
+            st.caption("Usernames must be 3-12 letters only and are saved in lowercase.")
+            if username:
+                if username_error:
+                    st.warning(username_error)
+                else:
+                    st.success(f"Username will be saved as '{normalized_username}'.")
+
+            password = st.text_input("New User Passphrase", type="password", key="admin_new_user_passphrase")
+
+            if st.button("Create User", key="admin_create_user_submit"):
                 user = get_user(admin_user['username'])
                 try:
-                    ph.verify(user['password_hash'], admin_reset_pw)
+                    ph.verify(user['password_hash'], admin_pw)
+                    if username_error:
+                        st.error(username_error)
+                    elif len(password) < 12:
+                        st.error("Passphrase must be at least 12 characters.")
+                    else:
+                        try:
+                            hash_pw = ph.hash(password)
+                            add_user(normalized_username, hash_pw, created_by_username=admin_user['username'])
+                            st.session_state["admin_create_user_success"] = f"User {normalized_username} created!"
+                            st.session_state["admin_clear_fields_mode"] = "create"
+                            st.rerun()
+                        except PermissionError as e:
+                            st.error(str(e))
+                        except ValueError as e:
+                            st.error(str(e))
+                except VerifyMismatchError:
+                    st.error("Incorrect admin password.")
+        else:
+            user_options = {user["username"]: user["username"] for user in manageable_users}
+            target_username = st.selectbox("User to Update", list(user_options.keys()), key="admin_target_username")
+            new_password = st.text_input("New User Passphrase", type="password", key="admin_reset_user_passphrase")
+            confirm_password = st.text_input(
+                "Confirm New User Passphrase",
+                type="password",
+                key="admin_reset_user_passphrase_confirm",
+            )
+
+            if st.button("Update Password", key="admin_update_user_password_submit"):
+                user = get_user(admin_user['username'])
+                try:
+                    ph.verify(user['password_hash'], admin_pw)
                     if len(new_password) < 12:
                         st.error("Passphrase must be at least 12 characters.")
                     elif new_password != confirm_password:
@@ -82,7 +90,9 @@ def show_admin_users():
                     else:
                         new_hash = ph.hash(new_password)
                         update_user_password(target_username, new_hash)
-                        st.success(f"Password reset for {target_username}.")
+                        st.session_state["admin_create_user_success"] = f"Password reset for {target_username}."
+                        st.session_state["admin_clear_fields_mode"] = "update"
+                        st.rerun()
                 except VerifyMismatchError:
                     st.error("Incorrect admin password.")
 
