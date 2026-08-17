@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+from datetime import date
 from database import operations as db
 
 try:
@@ -17,7 +18,6 @@ def delete_case_dialog(case_id, case_name):
         st.rerun()
     if col2.button("Cancel", use_container_width=True):
         st.rerun()
-
 def show_manage_cases():
     @fragment
     def render_manage_cases():
@@ -83,9 +83,24 @@ def show_manage_cases():
                         ec_type = st.selectbox("Case Type", CASE_TYPES, index=ec_type_idx)
 
                         col_s, col_e, col_r = st.columns(3)
-                        ec_start = col_s.text_input("Start Date", value=c.get('start_date', ''))
-                        ec_end = col_e.text_input("End Date", value=c.get('end_date', ''))
-                        ec_report_date = col_r.text_input("Report Date", value=c.get('report_date', ''))
+                        ec_start = col_s.date_input(
+                            "Start Date",
+                            value=date.fromisoformat(c["start_date"]),
+                            format="YYYY-MM-DD",
+                            key=f"edit_case_start_date_{c['id']}",
+                        ).isoformat()
+                        ec_end = col_e.date_input(
+                            "End Date",
+                            value=date.fromisoformat(c["end_date"]),
+                            format="YYYY-MM-DD",
+                            key=f"edit_case_end_date_{c['id']}",
+                        ).isoformat()
+                        ec_report_date = col_r.date_input(
+                            "Report Date",
+                            value=date.fromisoformat(c["report_date"]),
+                            format="YYYY-MM-DD",
+                            key=f"edit_case_report_date_{c['id']}",
+                        ).isoformat()
 
                         st.markdown("### Tasking & Legal Framework")
                         ec_tasking = st.text_area("Tasking Specification (Entities, Individuals, Domains, Handles)", value=c.get('target_scope', '') or '', height=100)

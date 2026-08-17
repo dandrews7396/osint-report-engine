@@ -65,42 +65,20 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
         elif field["kind"] == "date":
             if isinstance(default_value, date):
                 default_value = default_value.isoformat()
-            stripped_value = default_value.strip() if isinstance(default_value, str) else (default_value or "")
-            parsed_date = None
             today = date.today()
             min_value = _years_ago(field["min_years_ago"], today) if field.get("min_years_ago") else None
             max_value = today if field.get("max_date") == "today" else None
-            if stripped_value:
-                try:
-                    parsed_date = date.fromisoformat(stripped_value)
-                except ValueError:
-                    parsed_date = None
+            parsed_date = date.fromisoformat(default_value) if default_value else None
 
-            if stripped_value and (
-                parsed_date is None
-                or (min_value is not None and parsed_date < min_value)
-                or (max_value is not None and parsed_date > max_value)
-            ):
-                st.caption(
-                    f"{field['label']} is outside the calendar picker range or is not an exact date. "
-                    "Replace it with an exact in-range date to use the calendar picker."
-                )
-                values[field["key"]] = st.text_input(
-                    field["label"],
-                    value=str(default_value) if default_value is not None else "",
-                    placeholder=field.get("placeholder", ""),
-                    key=key,
-                )
-            else:
-                selected_date = st.date_input(
-                    field["label"],
-                    value=parsed_date,
-                    min_value=min_value,
-                    max_value=max_value,
-                    format="YYYY-MM-DD",
-                    key=key,
-                )
-                values[field["key"]] = selected_date.isoformat() if isinstance(selected_date, date) else ""
+            selected_date = st.date_input(
+                field["label"],
+                value=parsed_date,
+                min_value=min_value,
+                max_value=max_value,
+                format="YYYY-MM-DD",
+                key=key,
+            )
+            values[field["key"]] = selected_date.isoformat() if isinstance(selected_date, date) else ""
         else:
             values[field["key"]] = st.text_input(field["label"], value=default_value, placeholder=field.get("placeholder", ""), key=key)
     return values
