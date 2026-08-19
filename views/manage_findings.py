@@ -99,6 +99,9 @@ def _finding_details_editor(value: str, key: str) -> str:
 def show_manage_findings():
     @fragment
     def render_findings_page():
+        if st.session_state.pop("clear_new_finding_category", False):
+            st.session_state.pop("new_finding_category", None)
+
         st.title("Case Findings & Intelligence")
         st.write("Populate your cases with verified OSINT findings, including category-specific intelligence data and report-ready captures.")
 
@@ -110,47 +113,11 @@ def show_manage_findings():
             st.warning("Please create a case for the active client first.")
             return
 
-        case_options = {
-            f"[{case.get('case_ref', 'NO-REF')}] {case['case_name']} (Client: {case['client_name']})": case["id"]
-            for case in cases
-        }
-        case_option_labels = list(case_options)
-        preferred_case_id = st.session_state.get(
-            "active_case_id",
-            st.session_state.get("manage_findings_case_id"),
-        )
-        if (
-            preferred_case_id is not None
-            and preferred_case_id != st.session_state.get("manage_findings_case_id")
-        ):
-            st.session_state.pop("manage_findings_selected_case_label", None)
-        default_case_index = next(
-            (
-                index
-                for index, label in enumerate(case_option_labels)
-                if case_options[label] == preferred_case_id
-            ),
-            0,
-        )
-
-        def sync_active_case_from_findings() -> None:
-            selected_label = st.session_state["manage_findings_selected_case_label"]
-            selected_case_id = case_options[selected_label]
-            st.session_state.manage_findings_case_id = selected_case_id
-            st.session_state.active_case_id = selected_case_id
-            st.session_state.pop("manage_subjects_selected_case_label", None)
-
-        selected_case_label = st.selectbox(
-            "Select Active Case",
-            case_option_labels,
-            index=default_case_index,
-            key="manage_findings_selected_case_label",
-            on_change=sync_active_case_from_findings,
-        )
-        case_id = case_options[selected_case_label]
-        st.session_state.manage_findings_case_id = case_id
-        st.session_state.active_case_id = case_id
-        active_case = next(case for case in cases if case["id"] == case_id)
+        case_id = st.session_state.get("active_case_id")
+        active_case = next((case for case in cases if case["id"] == case_id), None)
+        if active_case is None:
+            st.info("Select an active case from its expander on Manage Cases before adding findings.")
+            return
 
         subjects = db.get_case_subjects(case_id)
         subject_options = {"No Subject Linked": None}
@@ -162,6 +129,9 @@ def show_manage_findings():
         categories = get_domain_category_choices()
         edit_finding_id = st.session_state.get("edit_finding_id")
 
+        st.caption(
+            f"Active case: [{active_case.get('case_ref', 'NO-REF')}] {active_case['case_name']}"
+        )
         st.divider()
         st.subheader("Current Case Intelligence Findings")
         findings = db.get_case_findings_overview(case_id)
@@ -328,6 +298,7 @@ def show_manage_findings():
                     category_data=mf_category_data,
                 )
                 _clear_finding_category_widget_state("new", "new_finding")
+                st.session_state["clear_new_finding_category"] = True
                 st.success("Finding successfully added.")
                 st.rerun()
 

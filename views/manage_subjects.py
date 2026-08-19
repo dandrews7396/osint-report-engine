@@ -127,46 +127,17 @@ def show_manage_subjects():
             st.warning("Please create a case for the active client first.")
             return
 
-        case_options = {f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})": c['id'] for c in cases}
-        case_options_list = list(case_options.keys())
-        preferred_case_id = st.session_state.get(
-            "active_case_id",
-            st.session_state.get("manage_subjects_case_id"),
-        )
-        if (
-            preferred_case_id is not None
-            and preferred_case_id != st.session_state.get("manage_subjects_case_id")
-        ):
-            st.session_state.pop("manage_subjects_selected_case_label", None)
-        default_index = next(
-            (
-                index
-                for index, case_label in enumerate(case_options_list)
-                if case_options[case_label] == preferred_case_id
-            ),
-            0,
-        )
-
-        def sync_active_case_from_subjects() -> None:
-            selected_label = st.session_state["manage_subjects_selected_case_label"]
-            selected_case_id = case_options[selected_label]
-            st.session_state.manage_subjects_case_id = selected_case_id
-            st.session_state.active_case_id = selected_case_id
-            st.session_state.pop("manage_findings_selected_case_label", None)
-
-        selected_case_label = st.selectbox(
-            "Select Active Case",
-            case_options_list,
-            index=default_index,
-            key="manage_subjects_selected_case_label",
-            on_change=sync_active_case_from_subjects,
-        )
-        case_id = case_options[selected_case_label]
-        st.session_state.manage_subjects_case_id = case_id
-        st.session_state.active_case_id = case_id
+        case_id = st.session_state.get("active_case_id")
+        active_case = next((case for case in cases if case["id"] == case_id), None)
+        if active_case is None:
+            st.info("Select an active case from its expander on Manage Cases before adding subjects.")
+            return
 
         subjects = db.get_case_subjects(case_id)
         edit_subject_id = st.session_state.get('edit_subject_id')
+        st.caption(
+            f"Active case: [{active_case.get('case_ref', 'NO-REF')}] {active_case['case_name']}"
+        )
         st.subheader("Current Case Subjects")
         st.caption(f"{len(subjects)} subject(s) on this case")
         st.caption("Internal notes are excluded from generated reports. Use the dedicated notes field only for case-only working notes.")
@@ -278,7 +249,7 @@ def show_manage_subjects():
                 get_subject_type_choices(),
                 key="new_subject_type",
             )
-            with st.form("add_subject"):
+            with st.form("add_subject", clear_on_submit=True):
                 col1, col2 = st.columns(2)
                 new_display_name = col1.text_input(
                     "Display Name",

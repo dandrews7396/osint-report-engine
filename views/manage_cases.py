@@ -18,10 +18,8 @@ def delete_case_dialog(case_id, case_name):
         db.delete_case(case_id)
         if st.session_state.get("active_case_id") == case_id:
             st.session_state.pop("active_case_id", None)
-            st.session_state.pop("manage_findings_case_id", None)
-            st.session_state.pop("manage_subjects_case_id", None)
-            st.session_state.pop("manage_findings_selected_case_label", None)
-            st.session_state.pop("manage_subjects_selected_case_label", None)
+            st.session_state.pop("edit_subject_id", None)
+            st.session_state.pop("edit_finding_id", None)
         st.rerun()
     if col2.button("Cancel", use_container_width=True):
         st.rerun()
@@ -209,10 +207,9 @@ def show_manage_cases():
                         st.rerun()
                     if col2.button("Set Active", key=f"active_case_{c['id']}", use_container_width=True):
                         st.session_state.active_case_id = c["id"]
-                        st.session_state.manage_findings_case_id = c["id"]
-                        st.session_state.manage_subjects_case_id = c["id"]
-                        st.session_state.pop("manage_findings_selected_case_label", None)
-                        st.session_state.pop("manage_subjects_selected_case_label", None)
+                        st.session_state.pop("edit_subject_id", None)
+                        st.session_state.pop("edit_finding_id", None)
+                        st.session_state.nav = "Manage Subjects"
                         st.rerun()
                     if col3.button("Delete Case", key=f"del_case_{c['id']}", use_container_width=True):
                         delete_case_dialog(c['id'], c['case_name'])
@@ -288,11 +285,6 @@ def show_manage_cases():
                         tools_and_sources_used=settings.get('tools_used', '')
                     )
                     st.session_state.edit_case_id = new_id
-                    st.session_state.active_case_id = new_id
-                    st.session_state.manage_findings_case_id = new_id
-                    st.session_state.manage_subjects_case_id = new_id
-                    st.session_state.pop("manage_findings_selected_case_label", None)
-                    st.session_state.pop("manage_subjects_selected_case_label", None)
                     st.success(f"Successfully created case: {c_name}")
                     st.rerun()
 

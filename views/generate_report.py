@@ -31,8 +31,8 @@ def show_generate_report():
             case_options_list = list(case_options.keys())
             default_index = 0
             if 'generate_report_case_id' not in st.session_state:
-                if 'manage_findings_case_id' in st.session_state:
-                    st.session_state.generate_report_case_id = st.session_state.manage_findings_case_id
+                if 'active_case_id' in st.session_state:
+                    st.session_state.generate_report_case_id = st.session_state.active_case_id
                 elif 'edit_case_id' in st.session_state:
                     st.session_state.generate_report_case_id = st.session_state.edit_case_id
                 elif cases:
@@ -44,7 +44,7 @@ def show_generate_report():
                     break
 
             selected_cname = st.selectbox(
-                "Select Active Case",
+                "Select Case for Report",
                 case_options_list,
                 index=default_index,
                 key="generate_report_selected_case_name",
