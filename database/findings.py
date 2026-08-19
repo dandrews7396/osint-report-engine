@@ -93,7 +93,12 @@ FINDING_CATEGORY_SCHEMAS = {
             {"key": "platform", "label": "Platform", "kind": "text", "placeholder": "e.g., X, LinkedIn, Telegram"},
             {"key": "username", "label": "Username", "kind": "text", "placeholder": "@handle or username"},
             {"key": "display_name", "label": "Display Name", "kind": "text", "placeholder": "Name shown on the profile"},
-            {"key": "capture_date", "label": "Capture Date", "kind": "date"},
+            {
+                "key": "capture_date",
+                "label": "Capture Date",
+                "kind": "date",
+                "max_date": "today",
+            },
             {"key": "archive_method", "label": "Archive Method", "kind": "text", "placeholder": "e.g., Wayback Machine, manual screenshot"},
         ],
     },
@@ -128,7 +133,12 @@ FINDING_CATEGORY_SCHEMAS = {
                 "kind": "text",
                 "placeholder": "Name of the original breach or compromised organization",
             },
-            {"key": "breach_date", "label": "Breach Date", "kind": "date"},
+            {
+                "key": "breach_date",
+                "label": "Breach Date",
+                "kind": "date",
+                "max_date": "today",
+            },
             {
                 "key": "data_types_exposed",
                 "label": "Data Types Exposed",
@@ -158,7 +168,12 @@ FINDING_CATEGORY_SCHEMAS = {
                 "kind": "text",
                 "placeholder": "e.g., OFAC SDN List, Entry #12345",
             },
-            {"key": "date_of_observation", "label": "Date of Observation", "kind": "date"},
+            {
+                "key": "date_of_observation",
+                "label": "Date of Observation",
+                "kind": "date",
+                "max_date": "today",
+            },
         ],
     },
     "Custom Category": {

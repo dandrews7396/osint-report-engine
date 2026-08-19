@@ -49,10 +49,7 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
         with open(md_template_path, 'r', encoding='utf-8') as f:
             md_content = f.read()
 
-        has_detailed_findings_section = (
-            '{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}' in md_content
-            or '{{ findings.detailed_findings }}' in md_content
-        )
+        has_detailed_findings_section = 'finding.detailed_findings' in md_content
 
         case['report_date_formatted'] = format_date_with_suffix(case.get('report_date', ''))
         case['start_date_formatted'] = format_date_with_suffix(case.get('start_date', ''))

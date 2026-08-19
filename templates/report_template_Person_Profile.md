@@ -108,4 +108,29 @@ No subjects have been recorded for this case.
 
 ## General Findings & Intelligence Analysis
 
-{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}
+{% if findings %}
+{% for finding in findings %}
+### {{ finding.title }}
+
+- **Risk Level:** {{ finding.risk_level }}
+- **Source Confidence:** {{ finding.confidence_level }}
+{% if finding.subject_name %}- **Linked Subject:** {{ finding.subject_name }}{% endif %}
+{% if finding.summary %}
+**Executive Summary:** {{ finding.summary }}
+{% endif %}
+{% if finding.category_summary_lines %}
+**Category Details:**
+{% for label, value in finding.category_summary_lines %}
+- **{{ label }}:** {{ value }}
+{% endfor %}
+{% endif %}
+{% if finding.source %}- **Source:** {{ finding.source }}{% endif %}
+{% if finding.description %}
+**Detailed Findings & Intelligence Analysis:**
+{{ finding.description }}
+{% endif %}
+
+{% endfor %}
+{% else %}
+No findings have been recorded for this case.
+{% endif %}

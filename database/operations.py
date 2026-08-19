@@ -664,7 +664,7 @@ def _map_case_finding_row(r: dict, include_details: bool = True) -> dict:
         'deleted_at': r.get('deleted_at')
     }
     if include_details:
-        mapped['description'] = r.get('detailed_findings') or r.get('summary') or ''
+        mapped['description'] = r.get('detailed_findings') or ''
     return mapped
 
 @st.cache_data(show_spinner=False)
