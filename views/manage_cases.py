@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import html
 from datetime import date
 from database import operations as db
 
@@ -202,7 +203,33 @@ def show_manage_cases():
             st.divider()
             st.subheader("Add New Case")
             with st.form("add_case", clear_on_submit=True):
-                st.info(f"Opening new case under client **{active_client_name}**")
+                st.markdown(
+                    f"""
+                    <div class="add-case-context-banner">
+                        &#8505;&nbsp; Opening new case under client <strong>{html.escape(active_client_name)}</strong>
+                    </div>
+                    <style>
+                    .add-case-context-banner {{
+                        background-color: rgba(28, 131, 225, 0.1);
+                        padding: 0.75rem 1rem;
+                        border-radius: 0.5rem;
+                        margin-bottom: 1rem;
+                        animation: add-case-banner-fade-out 0.4s ease-in 4.6s forwards;
+                    }}
+                    @keyframes add-case-banner-fade-out {{
+                        to {{
+                            opacity: 0;
+                            height: 0;
+                            padding-top: 0;
+                            padding-bottom: 0;
+                            margin-bottom: 0;
+                            overflow: hidden;
+                        }}
+                    }}
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
                 col_nc1, col_nc2 = st.columns(2)
                 c_ref = col_nc1.text_input("Case Reference Number", placeholder="e.g., CAS-2026-001")
                 c_name = col_nc2.text_input("Case Name", placeholder="e.g., Operation Vanguard")
