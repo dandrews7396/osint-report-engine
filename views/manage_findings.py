@@ -107,22 +107,41 @@ def show_manage_findings():
             for case in cases
         }
         case_option_labels = list(case_options)
+        preferred_case_id = st.session_state.get(
+            "active_case_id",
+            st.session_state.get("manage_findings_case_id"),
+        )
+        if (
+            preferred_case_id is not None
+            and preferred_case_id != st.session_state.get("manage_findings_case_id")
+        ):
+            st.session_state.pop("manage_findings_selected_case_label", None)
         default_case_index = next(
             (
                 index
                 for index, label in enumerate(case_option_labels)
-                if case_options[label] == st.session_state.get("manage_findings_case_id")
+                if case_options[label] == preferred_case_id
             ),
             0,
         )
+
+        def sync_active_case_from_findings() -> None:
+            selected_label = st.session_state["manage_findings_selected_case_label"]
+            selected_case_id = case_options[selected_label]
+            st.session_state.manage_findings_case_id = selected_case_id
+            st.session_state.active_case_id = selected_case_id
+            st.session_state.pop("manage_subjects_selected_case_label", None)
+
         selected_case_label = st.selectbox(
             "Select Active Case",
             case_option_labels,
             index=default_case_index,
             key="manage_findings_selected_case_label",
+            on_change=sync_active_case_from_findings,
         )
         case_id = case_options[selected_case_label]
         st.session_state.manage_findings_case_id = case_id
+        st.session_state.active_case_id = case_id
         active_case = next(case for case in cases if case["id"] == case_id)
 
         subjects = db.get_case_subjects(case_id)
@@ -193,7 +212,7 @@ def show_manage_findings():
                         e_source = st.text_input(
                             "Source",
                             value=full_finding.get("source", ""),
-                            help="Record the relevant URL, citation, or other source reference.",
+                            help="Record the relevant URL, citation, or Tool used.",
                         )
 
                         if st.form_submit_button("Save Changes"):

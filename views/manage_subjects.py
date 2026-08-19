@@ -129,21 +129,41 @@ def show_manage_subjects():
 
         case_options = {f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})": c['id'] for c in cases}
         case_options_list = list(case_options.keys())
-        default_index = 0
-        if 'manage_subjects_case_id' in st.session_state:
-            for i, case_label in enumerate(case_options_list):
-                if case_options[case_label] == st.session_state.manage_subjects_case_id:
-                    default_index = i
-                    break
+        preferred_case_id = st.session_state.get(
+            "active_case_id",
+            st.session_state.get("manage_subjects_case_id"),
+        )
+        if (
+            preferred_case_id is not None
+            and preferred_case_id != st.session_state.get("manage_subjects_case_id")
+        ):
+            st.session_state.pop("manage_subjects_selected_case_label", None)
+        default_index = next(
+            (
+                index
+                for index, case_label in enumerate(case_options_list)
+                if case_options[case_label] == preferred_case_id
+            ),
+            0,
+        )
+
+        def sync_active_case_from_subjects() -> None:
+            selected_label = st.session_state["manage_subjects_selected_case_label"]
+            selected_case_id = case_options[selected_label]
+            st.session_state.manage_subjects_case_id = selected_case_id
+            st.session_state.active_case_id = selected_case_id
+            st.session_state.pop("manage_findings_selected_case_label", None)
 
         selected_case_label = st.selectbox(
             "Select Active Case",
             case_options_list,
             index=default_index,
             key="manage_subjects_selected_case_label",
+            on_change=sync_active_case_from_subjects,
         )
         case_id = case_options[selected_case_label]
         st.session_state.manage_subjects_case_id = case_id
+        st.session_state.active_case_id = case_id
 
         subjects = db.get_case_subjects(case_id)
         edit_subject_id = st.session_state.get('edit_subject_id')

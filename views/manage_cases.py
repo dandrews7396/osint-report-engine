@@ -16,6 +16,12 @@ def delete_case_dialog(case_id, case_name):
     col1, col2 = st.columns(2)
     if col1.button("Yes, Delete", type="primary", use_container_width=True):
         db.delete_case(case_id)
+        if st.session_state.get("active_case_id") == case_id:
+            st.session_state.pop("active_case_id", None)
+            st.session_state.pop("manage_findings_case_id", None)
+            st.session_state.pop("manage_subjects_case_id", None)
+            st.session_state.pop("manage_findings_selected_case_label", None)
+            st.session_state.pop("manage_subjects_selected_case_label", None)
         st.rerun()
     if col2.button("Cancel", use_container_width=True):
         st.rerun()
@@ -59,12 +65,17 @@ def show_manage_cases():
         cases = db.get_cases()
         active_client_cases = [c for c in cases if c['client_id'] == active_client_id]
         edit_case_id = st.session_state.get('edit_case_id')
+        active_case_id = st.session_state.get("active_case_id")
 
         if not active_client_cases:
             st.info("*No cases found for this client. Create a new case below.*")
         for c in active_client_cases:
             is_editing = edit_case_id == c['id']
-            case_label = f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})"
+            is_active = active_case_id == c["id"]
+            case_label = (
+                f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} "
+                f"(Client: {c['client_name']}){' (Active)' if is_active else ''}"
+            )
 
             if is_editing:
                 st.markdown(f"#### {case_label}")
@@ -192,11 +203,18 @@ def show_manage_cases():
                     if c.get('target_scope'):
                         st.write(f"**Tasking:** {c['target_scope']}")
 
-                    col1, col2 = st.columns(2)
+                    col1, col2, col3 = st.columns(3)
                     if col1.button("Edit Case", key=f"edit_case_btn_{c['id']}", use_container_width=True):
                         st.session_state.edit_case_id = c['id']
                         st.rerun()
-                    if col2.button("Delete Case", key=f"del_case_{c['id']}", use_container_width=True):
+                    if col2.button("Set Active", key=f"active_case_{c['id']}", use_container_width=True):
+                        st.session_state.active_case_id = c["id"]
+                        st.session_state.manage_findings_case_id = c["id"]
+                        st.session_state.manage_subjects_case_id = c["id"]
+                        st.session_state.pop("manage_findings_selected_case_label", None)
+                        st.session_state.pop("manage_subjects_selected_case_label", None)
+                        st.rerun()
+                    if col3.button("Delete Case", key=f"del_case_{c['id']}", use_container_width=True):
                         delete_case_dialog(c['id'], c['case_name'])
 
         if edit_case_id is None:
@@ -206,7 +224,7 @@ def show_manage_cases():
                 st.markdown(
                     f"""
                     <div class="add-case-context-banner">
-                        &#8505;&nbsp; Opening new case under client <strong>{html.escape(active_client_name)}</strong>
+                        &nbsp; Opening new case under client <strong>{html.escape(active_client_name)}</strong>
                     </div>
                     <style>
                     .add-case-context-banner {{
@@ -270,6 +288,11 @@ def show_manage_cases():
                         tools_and_sources_used=settings.get('tools_used', '')
                     )
                     st.session_state.edit_case_id = new_id
+                    st.session_state.active_case_id = new_id
+                    st.session_state.manage_findings_case_id = new_id
+                    st.session_state.manage_subjects_case_id = new_id
+                    st.session_state.pop("manage_findings_selected_case_label", None)
+                    st.session_state.pop("manage_subjects_selected_case_label", None)
                     st.success(f"Successfully created case: {c_name}")
                     st.rerun()
 
