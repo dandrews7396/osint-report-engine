@@ -177,9 +177,8 @@ def init_db():
                 source_confidence TEXT DEFAULT 'High Confidence',
                 summary TEXT,
                 detailed_findings TEXT,
-                evidence_url TEXT,
-                evidence_hash_sha256 TEXT,
-                source_citation TEXT,
+                source TEXT,
+                category_data_json TEXT NOT NULL DEFAULT '{}',
                 deleted_at TEXT,
                 FOREIGN KEY (case_id) REFERENCES cases (id) ON DELETE CASCADE
             )

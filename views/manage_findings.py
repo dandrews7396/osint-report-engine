@@ -1,5 +1,12 @@
+from datetime import date
+
 import streamlit as st
 from database import operations as db
+from database.findings import (
+    get_domain_category_choices,
+    get_finding_schema,
+    normalize_finding_data,
+)
 from streamlit_jodit import st_jodit
 from utils.helpers import process_base64_images, restore_base64_images, sanitize_rich_html
 
@@ -9,258 +16,292 @@ except AttributeError:
     def fragment(func):
         return func
 
+
+RISK_LEVELS = ["Critical", "High", "Medium", "Low", "Informational"]
+CONFIDENCE_LEVELS = ["High Confidence", "Moderate Confidence", "Low Confidence", "Unverified"]
+
+
+def _finding_field_key(finding_id: int | str, category: str, field_key: str, prefix: str) -> str:
+    return f"{prefix}_{finding_id}_{category}_{field_key}"
+
+
+def _clear_finding_category_widget_state(finding_id: int | str, prefix: str) -> None:
+    prefix_root = f"{prefix}_{finding_id}_"
+    for key in list(st.session_state.keys()):
+        if key.startswith(prefix_root):
+            del st.session_state[key]
+
+
+def _render_finding_category_fields(
+    finding_id: int | str,
+    category: str,
+    existing_data: dict | None,
+    prefix: str,
+) -> dict[str, str]:
+    values = {}
+    normalized_data = normalize_finding_data(category, existing_data)
+    for field in get_finding_schema(category)["fields"]:
+        key = _finding_field_key(finding_id, category, field["key"], prefix)
+        default_value = st.session_state.get(key, normalized_data[field["key"]])
+        if field["kind"] == "textarea":
+            values[field["key"]] = st.text_area(
+                field["label"],
+                value=default_value,
+                placeholder=field.get("placeholder", ""),
+                key=key,
+            )
+        elif field["kind"] == "date":
+            parsed_date = date.fromisoformat(default_value) if default_value else None
+            selected_date = st.date_input(
+                field["label"],
+                value=parsed_date,
+                format="YYYY-MM-DD",
+                key=key,
+            )
+            values[field["key"]] = selected_date.isoformat() if isinstance(selected_date, date) else ""
+        elif field["kind"] == "select":
+            options = field["options"]
+            index = options.index(default_value) if default_value in options else 0
+            values[field["key"]] = st.selectbox(field["label"], options, index=index, key=key)
+        else:
+            values[field["key"]] = st.text_input(
+                field["label"],
+                value=default_value,
+                placeholder=field.get("placeholder", ""),
+                key=key,
+            )
+    return values
+
+
+def _finding_details_editor(value: str, key: str) -> str:
+    st.markdown("**Detailed Findings & Intelligence Analysis**")
+    st.caption("Use this field for the analytical narrative, screenshots, and captures that should display in the report.")
+    return st_jodit(
+        value=restore_base64_images(value),
+        config={
+            "theme": "dark",
+            "style": {"background": "#0e1117", "color": "#ffffff"},
+            "height": 350,
+            "uploader": {"insertImageAsBase64URI": True},
+        },
+        key=key,
+    )
+
+
 def show_manage_findings():
     @fragment
     def render_findings_page():
         st.title("Case Findings & Intelligence")
-        st.write("Populate your cases with verified OSINT findings. You can manually enter findings with digital evidence details or import standardized threat vectors directly from your OSINT Risk Library.")
+        st.write("Populate your cases with verified OSINT findings, including category-specific intelligence data and report-ready captures.")
 
         cases = db.get_cases()
-        active_client_id = st.session_state.get('active_client_id')
+        active_client_id = st.session_state.get("active_client_id")
         if active_client_id:
-            cases = [c for c in cases if c['client_id'] == active_client_id]
-
+            cases = [case for case in cases if case["client_id"] == active_client_id]
         if not cases:
             st.warning("Please create a case for the active client first.")
             return
 
-        case_options = {f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})": c['id'] for c in cases}
-        case_options_list = list(case_options.keys())
-
-        default_index = 0
-        if 'manage_findings_case_id' in st.session_state:
-            for i, c_name in enumerate(case_options_list):
-                if case_options[c_name] == st.session_state.manage_findings_case_id:
-                    default_index = i
-                    break
-
+        case_options = {
+            f"[{case.get('case_ref', 'NO-REF')}] {case['case_name']} (Client: {case['client_name']})": case["id"]
+            for case in cases
+        }
+        case_option_labels = list(case_options)
+        default_case_index = next(
+            (
+                index
+                for index, label in enumerate(case_option_labels)
+                if case_options[label] == st.session_state.get("manage_findings_case_id")
+            ),
+            0,
+        )
         selected_case_label = st.selectbox(
             "Select Active Case",
-            case_options_list,
-            index=default_index,
+            case_option_labels,
+            index=default_case_index,
             key="manage_findings_selected_case_label",
         )
         case_id = case_options[selected_case_label]
         st.session_state.manage_findings_case_id = case_id
-        active_case = next((c for c in cases if c['id'] == case_id), None)
+        active_case = next(case for case in cases if case["id"] == case_id)
+
         subjects = db.get_case_subjects(case_id)
-        edit_finding_id = st.session_state.get('edit_finding_id')
         subject_options = {"No Subject Linked": None}
         for subject in subjects:
-            subject_options[f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} — {subject['relationship_to_case']}"] = subject['id']
-        subject_option_labels = list(subject_options.keys())
+            subject_options[
+                f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} — {subject['relationship_to_case']}"
+            ] = subject["id"]
+        subject_option_labels = list(subject_options)
+        categories = get_domain_category_choices()
+        edit_finding_id = st.session_state.get("edit_finding_id")
 
-        DOMAIN_CATEGORIES = [
-            "Identity & PII",
-            "Corporate Governance & Ownership",
-            "Infrastructure & Network Assets",
-            "Social Media & Digital Footprint",
-            "Financial & Asset Tracing",
-            "Dark Web & Leaked Data",
-            "Geopolitical & Physical Security",
-            "Custom Category"
-        ]
+        st.divider()
+        st.subheader("Current Case Intelligence Findings")
+        findings = db.get_case_findings_overview(case_id)
+        if not findings:
+            st.info("No intelligence findings added to this case yet.")
 
-        RISK_LEVELS = ["Critical", "High", "Medium", "Low", "Informational"]
-        CONFIDENCE_LEVELS = ["High Confidence", "Moderate Confidence", "Low Confidence", "Unverified"]
-
-        def render_findings_list():
-            st.divider()
-            st.subheader("Current Case Intelligence Findings")
-
-            findings = db.get_case_findings_overview(case_id)
-            if not findings:
-                st.info("No intelligence findings added to this case yet.")
-                return
-
-            for f in findings:
-                is_expanded = edit_finding_id == f['id']
-                finding_label = f"[{f.get('risk_level', 'Unspecified')}] [{f.get('confidence_level', 'Unspecified')}] {f.get('title', 'Untitled')} ({f.get('category', 'General')})"
-                if is_expanded:
-                    st.markdown(f"#### {finding_label}")
-                    st.caption("Editing is locked open until you save or cancel.")
-                    item_container = st.container()
-                else:
-                    item_container = st.expander(finding_label)
-
-                with item_container:
-                    if f.get('subject_name'):
-                        st.caption(f"Linked subject: {f['subject_name']}")
-                    if is_expanded:
-                        full_finding = db.get_case_finding(f['id']) or f
-                        with st.form(f"edit_form_{f['id']}"):
-                            e_title = st.text_input("Finding Title", value=full_finding['title'])
-
-                            col_cat, col_risk, col_conf = st.columns(3)
-                            cat_idx = DOMAIN_CATEGORIES.index(full_finding['category']) if full_finding['category'] in DOMAIN_CATEGORIES else 0
-                            e_category = col_cat.selectbox("Domain Category", DOMAIN_CATEGORIES, index=cat_idx)
-
-                            risk_idx = RISK_LEVELS.index(full_finding['risk_level']) if full_finding['risk_level'] in RISK_LEVELS else 2
-                            e_risk = col_risk.selectbox("Risk Level", RISK_LEVELS, index=risk_idx)
-
-                            conf_idx = CONFIDENCE_LEVELS.index(full_finding.get('confidence_level', 'High Confidence')) if full_finding.get('confidence_level') in CONFIDENCE_LEVELS else 0
-                            e_conf = col_conf.selectbox("Source Confidence", CONFIDENCE_LEVELS, index=conf_idx)
-
-                            subject_index = 0
-                            if full_finding.get('subject_id') in subject_options.values():
-                                for i, label in enumerate(subject_option_labels):
-                                    if subject_options[label] == full_finding.get('subject_id'):
-                                        subject_index = i
-                                        break
-                            e_subject_label = st.selectbox(
-                                "Linked Subject (optional)",
-                                subject_option_labels,
-                                index=subject_index,
-                            )
-                            e_subject_id = subject_options[e_subject_label]
-
-                            e_summary = st.text_area("Executive Summary", value=full_finding.get('summary', '') or '', height=100)
-
-                            st.markdown("**Detailed Findings & Intelligence Analysis**")
-                            st.caption("You can paste images directly into this field; processing happens when you save.")
-                            jodit_config = {
-                                "theme": "dark",
-                                "style": {"background": "#0e1117", "color": "#ffffff"},
-                                "height": 350,
-                                "uploader": {"insertImageAsBase64URI": True},
-                            }
-                            safe_details = restore_base64_images(full_finding.get('description', '') or '')
-                            e_details = st_jodit(value=safe_details, config=jodit_config, key=f"e_details_{f['id']}")
-
-                            st.markdown("**Digital Evidence & Provenance**")
-                            col_e1, col_e2 = st.columns(2)
-                            e_url = col_e1.text_input("Evidence URL / Archive Link", value=full_finding.get('evidence_url', '') or '')
-                            e_hash = col_e2.text_input("Evidence File SHA-256 Hash", value=full_finding.get('evidence_hash_sha256', '') or '')
-                            e_citation = st.text_input("Source Citation / Document Reference", value=full_finding.get('source_citation', '') or '')
-
-                            if st.form_submit_button("Save Changes"):
-                                processed_details = process_base64_images(sanitize_rich_html(e_details), active_case['client_id'], case_id)
-                                db.update_case_finding(
-                                    f['id'],
-                                    e_category,
-                                    e_title,
-                                    e_risk,
-                                    e_conf,
-                                    e_summary,
-                                    processed_details,
-                                    e_url,
-                                    e_hash,
-                                    e_citation,
-                                    subject_id=e_subject_id
-                                )
-                                st.session_state.edit_finding_id = None
-                                st.success("Finding updated!")
-                                st.rerun()
-
-                        if st.button("Cancel Edit", key=f"cancel_find_{f['id']}"):
-                            st.session_state.edit_finding_id = None
-                            st.rerun()
-                    else:
-                        st.write(f"**Source Confidence:** {f.get('source_confidence', 'Unspecified')}")
-                        if f.get('summary'):
-                            st.write(f"**Summary:** {f['summary']}")
-                        if f.get('evidence_url'):
-                            st.write(f"**Evidence URL:** [{f['evidence_url']}]({f['evidence_url']})")
-                        if f.get('evidence_hash_sha256'):
-                            st.caption(f"**SHA-256:** `{f['evidence_hash_sha256']}`")
-
-                        col1, col2 = st.columns(2)
-                        if col1.button("Edit Finding", key=f"edit_find_btn_{f['id']}"):
-                            st.session_state.edit_finding_id = f['id']
-                            st.rerun()
-                        if col2.button("Delete Finding", key=f"del_find_{f['id']}"):
-                            db.delete_case_finding(f['id'])
-                            st.rerun()
-
-        def render_findings_import():
-            st.divider()
-            with st.expander("Import Vector from Risk Library"):
-                risk_lib = db.get_risk_library()
-
-                if not risk_lib:
-                    st.info("No pre-populated risk vectors found in the library.")
-                else:
-                    with st.form("import_from_risk_lib"):
-                        lib_options = {f"[{v['default_risk_level']}] {v['title']} ({v.get('category', 'General')})": v for v in risk_lib}
-                        selected_vector_name = st.selectbox("Select Threat Vector", list(lib_options.keys()))
-                        imported_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
-                        imported_subject_id = subject_options[imported_subject_label]
-
-                        if st.form_submit_button("Import to Case") and selected_vector_name:
-                            selected_v = lib_options[selected_vector_name]
-                            db.add_case_finding(
-                                case_id=case_id,
-                                subject_id=imported_subject_id,
-                                domain_category=selected_v.get('category', 'Custom Category'),
-                                title=selected_v['title'],
-                                risk_level=selected_v['default_risk_level'],
-                                source_confidence=selected_v.get('source_confidence', 'High Confidence'),
-                                summary=selected_v.get('description', ''),
-                                detailed_findings=sanitize_rich_html(selected_v.get('investigative_guidance', '')),
-                                evidence_url='',
-                                evidence_hash_sha256='',
-                                source_citation=selected_v.get('refs', '')
-                            )
-                            st.success(f"Imported '{selected_v['title']}' to case.")
-                            st.rerun()
-
-        def render_findings_add_form():
-            st.divider()
-            if 'add_finding_key' not in st.session_state:
-                st.session_state.add_finding_key = 0
-
-            st.subheader("Add Manual Intelligence Finding")
-            with st.form(f"add_manual_finding_{st.session_state.add_finding_key}", clear_on_submit=True):
-                mf_title = st.text_input("Finding Title", placeholder="e.g., Unsanctified Corporate Entity Registered in Offshore Jurisdiction")
-
-                col_m1, col_m2, col_m3 = st.columns(3)
-                mf_category = col_m1.selectbox("Domain Category", DOMAIN_CATEGORIES)
-                mf_risk = col_m2.selectbox("Risk Level", RISK_LEVELS)
-                mf_conf = col_m3.selectbox("Source Confidence", CONFIDENCE_LEVELS)
-
-                mf_summary = st.text_area("Executive Summary", placeholder="Brief high-level summary of the intelligence item...")
-                mf_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
-                mf_subject_id = subject_options[mf_subject_label]
-
-                st.markdown("**Detailed Findings & Narrative**")
-                st.caption("You can paste images directly into this field; processing happens when you add the finding.")
-                jodit_config = {
-                    "theme": "dark",
-                    "style": {"background": "#0e1117", "color": "#ffffff"},
-                    "placeholder": "Enter detailed analytical narrative, screenshots, or extracted raw intelligence here...",
-                    "height": 350,
-                    "uploader": {"insertImageAsBase64URI": True},
-                }
-                mf_details = st_jodit(value="", config=jodit_config, key=f"mf_details_add_{st.session_state.add_finding_key}")
-
-                st.markdown("**Digital Evidence & Chain of Custody**")
-                col_me1, col_me2 = st.columns(2)
-                mf_url = col_me1.text_input("Evidence URL / Snapshot Link")
-                mf_hash = col_me2.text_input("Evidence File SHA-256 Hash")
-                mf_citation = st.text_input("Source Citation / Platform Name", placeholder="e.g., UK Companies House / OpenCorporates API")
-
-                if st.form_submit_button("Add Finding") and mf_title:
-                    processed_mf_details = process_base64_images(sanitize_rich_html(mf_details), active_case['client_id'], case_id)
-                    db.add_case_finding(
-                        case_id=case_id,
-                        subject_id=mf_subject_id,
-                        domain_category=mf_category,
-                        title=mf_title,
-                        risk_level=mf_risk,
-                        source_confidence=mf_conf,
-                        summary=mf_summary,
-                        detailed_findings=processed_mf_details,
-                        evidence_url=mf_url,
-                        evidence_hash_sha256=mf_hash,
-                        source_citation=mf_citation
+        for finding in findings:
+            is_editing = edit_finding_id == finding["id"]
+            finding_label = (
+                f"[{finding.get('risk_level', 'Unspecified')}] "
+                f"[{finding.get('confidence_level', 'Unspecified')}] "
+                f"{finding.get('title', 'Untitled')} ({finding.get('category', 'General')})"
+            )
+            item_container = st.container() if is_editing else st.expander(finding_label)
+            with item_container:
+                if finding.get("subject_name"):
+                    st.caption(f"Linked subject: {finding['subject_name']}")
+                if is_editing:
+                    full_finding = db.get_case_finding(finding["id"]) or finding
+                    category_key = f"edit_finding_{finding['id']}_category"
+                    st.session_state.setdefault(category_key, full_finding["category"])
+                    edit_category = st.selectbox(
+                        "Domain Category",
+                        categories,
+                        key=category_key,
                     )
-                    st.success("Finding successfully added to case!")
-                    st.session_state.add_finding_key += 1
-                    st.rerun()
+                    with st.form(f"edit_finding_{finding['id']}"):
+                        e_title = st.text_input("Finding Title", value=full_finding["title"])
+                        col_risk, col_conf = st.columns(2)
+                        risk_index = RISK_LEVELS.index(full_finding["risk_level"]) if full_finding["risk_level"] in RISK_LEVELS else 2
+                        e_risk = col_risk.selectbox("Risk Level", RISK_LEVELS, index=risk_index)
+                        confidence = full_finding.get("confidence_level", "High Confidence")
+                        confidence_index = CONFIDENCE_LEVELS.index(confidence) if confidence in CONFIDENCE_LEVELS else 0
+                        e_confidence = col_conf.selectbox("Source Confidence", CONFIDENCE_LEVELS, index=confidence_index)
 
-        render_findings_list()
-        if edit_finding_id is None:
-            render_findings_import()
-            render_findings_add_form()
+                        subject_index = next(
+                            (
+                                index
+                                for index, label in enumerate(subject_option_labels)
+                                if subject_options[label] == full_finding.get("subject_id")
+                            ),
+                            0,
+                        )
+                        e_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels, index=subject_index)
+                        e_summary = st.text_area("Executive Summary", value=full_finding.get("summary", ""), height=100)
+                        e_category_data = _render_finding_category_fields(
+                            finding["id"],
+                            edit_category,
+                            full_finding.get("category_data"),
+                            "edit_finding",
+                        )
+                        e_details = _finding_details_editor(
+                            full_finding.get("description", ""),
+                            f"edit_finding_{finding['id']}_details",
+                        )
+                        e_source = st.text_input(
+                            "Source",
+                            value=full_finding.get("source", ""),
+                            help="Record the relevant URL, citation, or other source reference.",
+                        )
+
+                        if st.form_submit_button("Save Changes"):
+                            db.update_case_finding(
+                                finding_id=finding["id"],
+                                domain_category=edit_category,
+                                title=e_title or "",
+                                risk_level=e_risk,
+                                source_confidence=e_confidence,
+                                summary=e_summary or "",
+                                detailed_findings=process_base64_images(
+                                    sanitize_rich_html(e_details),
+                                    active_case["client_id"],
+                                    case_id,
+                                ),
+                                source=e_source or "",
+                                category_data=e_category_data,
+                                subject_id=subject_options[e_subject_label],
+                            )
+                            st.session_state.edit_finding_id = None
+                            _clear_finding_category_widget_state(finding["id"], "edit_finding")
+                            st.success("Finding updated.")
+                            st.rerun()
+
+                    if st.button("Cancel Edit", key=f"cancel_finding_{finding['id']}"):
+                        st.session_state.edit_finding_id = None
+                        _clear_finding_category_widget_state(finding["id"], "edit_finding")
+                        st.rerun()
+                else:
+                    if finding.get("summary"):
+                        st.write(f"**Summary:** {finding['summary']}")
+                    if finding.get("source"):
+                        st.write(f"**Source:** {finding['source']}")
+                    col_edit, col_delete = st.columns(2)
+                    if col_edit.button("Edit Finding", key=f"edit_finding_{finding['id']}", use_container_width=True):
+                        st.session_state.edit_finding_id = finding["id"]
+                        st.rerun()
+                    if col_delete.button("Delete Finding", key=f"delete_finding_{finding['id']}", use_container_width=True):
+                        db.delete_case_finding(finding["id"])
+                        st.rerun()
+
+        if edit_finding_id is not None:
+            return
+
+        st.divider()
+        with st.expander("Import Vector from Risk Library"):
+            risk_library = db.get_risk_library()
+            if not risk_library:
+                st.info("No pre-populated risk vectors found in the library.")
+            else:
+                with st.form("import_from_risk_library"):
+                    library_options = {
+                        f"[{vector['default_risk_level']}] {vector['title']} ({vector.get('category', 'General')})": vector
+                        for vector in risk_library
+                    }
+                    selected_vector_label = st.selectbox("Select Threat Vector", list(library_options))
+                    imported_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
+                    if st.form_submit_button("Import to Case"):
+                        vector = library_options[selected_vector_label]
+                        db.add_case_finding(
+                            case_id=case_id,
+                            subject_id=subject_options[imported_subject_label],
+                            domain_category=vector["category"],
+                            title=vector["title"],
+                            risk_level=vector["default_risk_level"],
+                            source_confidence=vector.get("source_confidence", "High Confidence"),
+                            summary=vector.get("description", ""),
+                            detailed_findings=sanitize_rich_html(vector.get("investigative_guidance", "")),
+                            source=vector.get("refs", ""),
+                            category_data={},
+                        )
+                        st.success(f"Imported '{vector['title']}' to case. Complete its category-specific fields by editing the finding.")
+                        st.rerun()
+
+        st.divider()
+        st.subheader("Add Manual Intelligence Finding")
+        st.session_state.setdefault("new_finding_category", categories[0])
+        new_category = st.selectbox("Domain Category", categories, key="new_finding_category")
+        with st.form("add_manual_finding", clear_on_submit=True):
+            mf_title = st.text_input("Finding Title", placeholder="e.g., Unsanctioned Corporate Entity Registered in Offshore Jurisdiction")
+            col_risk, col_conf = st.columns(2)
+            mf_risk = col_risk.selectbox("Risk Level", RISK_LEVELS)
+            mf_confidence = col_conf.selectbox("Source Confidence", CONFIDENCE_LEVELS)
+            mf_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
+            mf_summary = st.text_area("Executive Summary", placeholder="Brief high-level summary of the intelligence item...")
+            mf_category_data = _render_finding_category_fields("new", new_category, {}, "new_finding")
+            mf_details = _finding_details_editor("", "new_finding_details")
+            mf_source = st.text_input("Source", help="Record the relevant URL, citation, or other source reference.")
+
+            if st.form_submit_button("Add Finding") and mf_title:
+                db.add_case_finding(
+                    case_id=case_id,
+                    subject_id=subject_options[mf_subject_label],
+                    domain_category=new_category,
+                    title=mf_title,
+                    risk_level=mf_risk,
+                    source_confidence=mf_confidence,
+                    summary=mf_summary,
+                    detailed_findings=process_base64_images(
+                        sanitize_rich_html(mf_details),
+                        active_case["client_id"],
+                        case_id,
+                    ),
+                    source=mf_source,
+                    category_data=mf_category_data,
+                )
+                _clear_finding_category_widget_state("new", "new_finding")
+                st.success("Finding successfully added.")
+                st.rerun()
 
     render_findings_page()

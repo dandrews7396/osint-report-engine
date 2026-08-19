@@ -7,6 +7,11 @@ from database.subjects import (
     subject_display_name,
     subject_summary_lines,
 )
+from database.findings import (
+    decode_finding_data,
+    encode_finding_data,
+    finding_summary_lines,
+)
 
 def _clear_read_caches():
     st.cache_data.clear()
@@ -639,25 +644,27 @@ def update_in_risk_library(
 
 # --- Case Findings (Formerly Project Findings) ---
 def _map_case_finding_row(r: dict, include_details: bool = True) -> dict:
+    category = r.get('domain_category', '')
     mapped = {
         'id': r.get('id'),
         'case_id': r.get('case_id'),
         'subject_id': r.get('subject_id'),
         'subject_name': r.get('subject_name'),
-        'category': r.get('domain_category'),
+        'category': category,
         'title': r.get('title'),
         'risk_level': r.get('risk_level'),
         'confidence_level': r.get('source_confidence'),
         'summary': r.get('summary'),
-        'evidence_url': r.get('evidence_url'),
-        'evidence_hash_sha256': r.get('evidence_hash_sha256'),
-        'source_citation': r.get('source_citation'),
-        'refs': r.get('source_citation') or (r.get('evidence_url') or ''),
+        'source': r.get('source', ''),
+        'category_data': decode_finding_data(category, r.get('category_data_json')),
+        'category_summary_lines': finding_summary_lines(
+            category,
+            r.get('category_data_json'),
+        ),
         'deleted_at': r.get('deleted_at')
     }
     if include_details:
         mapped['description'] = r.get('detailed_findings') or r.get('summary') or ''
-        mapped['evidence'] = r.get('evidence_url') or r.get('source_citation') or ''
     return mapped
 
 @st.cache_data(show_spinner=False)
@@ -705,7 +712,7 @@ def get_case_findings_overview(case_id: int) -> list[dict]:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT f.id, f.case_id, f.subject_id, s.display_name AS subject_name, f.domain_category, f.title, f.risk_level, f.source_confidence,
-                   f.summary, f.evidence_url, f.evidence_hash_sha256, f.source_citation, f.deleted_at
+                   f.summary, f.source, f.category_data_json, f.deleted_at
             FROM case_findings f
             LEFT JOIN case_subjects s ON f.subject_id = s.id
             WHERE f.case_id = ? AND f.deleted_at IS NULL
@@ -745,9 +752,8 @@ def add_case_finding(
     source_confidence: str = 'High Confidence',
     summary: str = '',
     detailed_findings: str = '',
-    evidence_url: str = '',
-    evidence_hash_sha256: str = '',
-    source_citation: str = '',
+    source: str = '',
+    category_data: dict[str, str] | None = None,
     subject_id: int | None = None,
 ):
     conn = get_connection()
@@ -756,9 +762,12 @@ def add_case_finding(
         cursor.execute("""
             INSERT INTO case_findings (
                 case_id, subject_id, domain_category, title, risk_level, source_confidence, 
-                summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (case_id, subject_id, domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation))
+                summary, detailed_findings, source, category_data_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            case_id, subject_id, domain_category, title, risk_level, source_confidence,
+            summary, detailed_findings, source, encode_finding_data(domain_category, category_data),
+        ))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:
@@ -775,9 +784,8 @@ def update_case_finding(
     source_confidence: str,
     summary: str,
     detailed_findings: str,
-    evidence_url: str,
-    evidence_hash_sha256: str,
-    source_citation: str,
+    source: str,
+    category_data: dict[str, str] | None,
     subject_id: int | None = None,
 ):
     conn = get_connection()
@@ -786,9 +794,12 @@ def update_case_finding(
         cursor.execute("""
             UPDATE case_findings 
             SET subject_id = ?, domain_category = ?, title = ?, risk_level = ?, source_confidence = ?, 
-                summary = ?, detailed_findings = ?, evidence_url = ?, evidence_hash_sha256 = ?, source_citation = ?
+                summary = ?, detailed_findings = ?, source = ?, category_data_json = ?
             WHERE id = ?
-        """, (subject_id, domain_category, title, risk_level, source_confidence, summary, detailed_findings, evidence_url, evidence_hash_sha256, source_citation, finding_id))
+        """, (
+            subject_id, domain_category, title, risk_level, source_confidence, summary,
+            detailed_findings, source, encode_finding_data(domain_category, category_data), finding_id,
+        ))
         conn.commit()
         _clear_read_caches()
     except sqlite3.Error as e:

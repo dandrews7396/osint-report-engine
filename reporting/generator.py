@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 from jinja2.sandbox import SandboxedEnvironment
 from weasyprint import HTML
 from database import operations as db
+from database.findings import finding_summary_lines
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +29,6 @@ def format_date_with_suffix(date_str):
         return dt.strftime(f'%B {day}{suffix}, %Y')
     except Exception:
         return date_str
-
-
-def _normalize_report_text(value):
-    if not value:
-        return ''
-    text = str(value).replace('&nbsp;', ' ')
-    text = re.sub(r'<[^>]+>', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip().lower()
 
 
 def generate_report(case, client, firm, findings, output_path, include_risk_graphs: bool = True):
@@ -104,20 +96,10 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
                 risk_counts['Informational'] += 1
             
             finding['anchor'] = re.sub(r'[^a-z0-9]+', '-', (finding.get('title') or '').lower()).strip('-')
-            
-            description_raw = finding.get('description', '') or ''
-            evidence_raw = finding.get('evidence', '') or ''
-            normalized_description = _normalize_report_text(description_raw)
-            normalized_evidence = _normalize_report_text(evidence_raw)
-            finding['include_evidence_section'] = bool(
-                evidence_raw and not (
-                    normalized_description and normalized_evidence and normalized_description == normalized_evidence
-                )
+            finding['category_summary_lines'] = finding_summary_lines(
+                finding.get('category', ''),
+                finding.get('category_data'),
             )
-            finding['evidence_html'] = markdown.markdown(
-                evidence_raw,
-                extensions=['fenced_code', 'tables', 'md_in_html', 'toc', 'attr_list']
-            ) if finding['include_evidence_section'] else ''
 
         # Summary Table Construction
         table_html = '<div style="page-break-inside: avoid; margin-bottom: 20px;">\n'
@@ -144,7 +126,7 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
             risk = finding.get('risk_level', 'Informational')
             bg_color = color_map.get(risk, '#555')
             
-            scope_or_cat = finding.get('category') or finding.get('target') or 'N/A'
+            scope_or_cat = finding.get('category') or 'N/A'
             if scope_or_cat != 'N/A':
                 items = [i.strip() for i in scope_or_cat.split(',') if i.strip()]
                 item_links = []
@@ -233,36 +215,21 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
     {% if finding.category %}&nbsp; | <strong>Category:</strong> {{ finding.category }}{% endif %}
 </div>
 
-{% if finding.target %}**Target / Subject:** {{ finding.target }}<br>{% endif %}
-{% if finding.location %}**Location / Source URL:** {{ finding.location }}<br>{% endif %}
 {% if finding.subject_name %}**Linked Subject:** {{ finding.subject_name }}<br>{% endif %}
+
+{% if finding.category_summary_lines %}
+**Category-Specific Details:**
+{% for label, value in finding.category_summary_lines %}
+- **{{ label }}:** {{ value }}
+{% endfor %}
+{% endif %}
+
+{% if finding.source %}**Source:** {{ finding.source }}{% endif %}
 
 <div style="page-break-after: avoid; font-weight: bold; margin-bottom: 10px; margin-top: 20px;">Finding Description & Analysis:</div>
 </div>
 
 {{ finding.description }}
-
-{% if finding.remediation %}
-<div style="page-break-after: avoid; font-weight: bold; margin-bottom: 10px; margin-top: 20px;">Recommended Action / Mitigation:</div>
-
-{{ finding.remediation }}
-{% endif %}
-
-{% if finding.include_evidence_section and finding.evidence_html and finding.evidence_html.strip() %}
-<div style="page-break-after: avoid; font-weight: bold; margin-bottom: 10px; margin-top: 20px;">Intelligence Evidence & Collected Data:</div>
-
-<div class="markdown-content">{{ finding.evidence_html | safe }}</div>
-{% endif %}
-
-{% if finding.refs %}
-<div style="page-break-after: avoid; font-weight: bold; margin-bottom: 10px; margin-top: 20px;">Sources & References:</div>
-
-{% for ref in finding.refs.splitlines() %}
-{% if ref.strip() %}
-- <a href="{{ ref.strip() }}" target="_blank" style="word-break: break-all;">{{ ref.strip() }}</a>
-{% endif %}
-{% endfor %}
-{% endif %}
 {% endfor %}
 """
         md_content = md_content.replace('{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}', detailed_findings_md)

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-import io
 from database import operations as db
+from database.findings import get_domain_category_choices
 
 try:
     fragment = st.fragment
@@ -10,16 +10,7 @@ except AttributeError:
         return func
 
 def show_risk_library():
-    DOMAIN_CATEGORIES = [
-        "Identity & PII",
-        "Corporate Governance & Ownership",
-        "Infrastructure & Network Assets",
-        "Social Media & Digital Footprint",
-        "Financial & Asset Tracing",
-        "Dark Web & Leaked Data",
-        "Geopolitical & Physical Security",
-        "Custom Category"
-    ]
+    DOMAIN_CATEGORIES = get_domain_category_choices()
     
     RISK_LEVELS = ["Critical", "High", "Medium", "Low", "Informational"]
     CONFIDENCE_LEVELS = ["High Confidence", "Moderate Confidence", "Low Confidence", "Unverified"]
@@ -89,7 +80,7 @@ def show_risk_library():
                         st.success("Updated risk vector template.")
                         st.rerun()
 
-                col_del1, col_del2 = st.columns([1, 4])
+                col_del1, _ = st.columns([1, 4])
                 if col_del1.button("Delete Entry", key=f"del_risk_{item['id']}", type="primary"):
                     db.delete_risk_library_item(item['id'])
                     st.success("Deleted risk vector.")
