@@ -51,12 +51,20 @@ def _render_finding_category_fields(
                 key=key,
             )
         elif field["kind"] == "date":
-            parsed_date = date.fromisoformat(default_value) if default_value else None
+            parsed_date = (
+                default_value
+                if isinstance(default_value, date)
+                else date.fromisoformat(default_value)
+                if default_value
+                else None
+            )
+            max_date = date.today() if field.get("max_date") == "today" else None
             selected_date = st.date_input(
                 field["label"],
                 value=parsed_date,
                 format="YYYY-MM-DD",
                 key=key,
+                max_value=max_date,
             )
             values[field["key"]] = selected_date.isoformat() if isinstance(selected_date, date) else ""
         elif field["kind"] == "select":

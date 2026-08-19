@@ -390,7 +390,7 @@ def get_case_subjects(case_id: int) -> list[dict]:
             LEFT JOIN case_findings f ON f.subject_id = s.id AND f.deleted_at IS NULL
             WHERE s.case_id = ? AND s.deleted_at IS NULL
             GROUP BY s.id
-            ORDER BY s.id DESC
+            ORDER BY s.id ASC
         """, (case_id,))
         return [_map_case_subject_row(dict(row)) for row in cursor.fetchall()]
     except sqlite3.Error as e:

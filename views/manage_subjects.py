@@ -300,7 +300,7 @@ def show_manage_subjects():
                 if st.form_submit_button("Add Subject"):
                     cleaned_data = {k: (v or "").strip() for k, v in new_data.items()}
                     display_name = new_display_name.strip() or subject_display_name(new_type, cleaned_data)
-                    new_id = db.add_case_subject(
+                    db.add_case_subject(
                         case_id,
                         new_type,
                         new_relationship_options[new_relationship],
@@ -308,7 +308,7 @@ def show_manage_subjects():
                         cleaned_data,
                         new_notes,
                     )
-                    st.session_state.edit_subject_id = new_id
+                    st.session_state.edit_subject_id = None
                     st.session_state["clear_new_subject_fields"] = True
                     st.success(f"Added subject: {display_name}")
                     st.rerun()

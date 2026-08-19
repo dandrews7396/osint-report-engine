@@ -34,7 +34,12 @@ FINDING_CATEGORY_SCHEMAS = {
                 "kind": "select",
                 "options": ["Public Record", "Data Broker", "Social Media", "Breach Dataset", "Other"],
             },
-            {"key": "date_first_observed", "label": "Date First Observed", "kind": "date"},
+            {
+                "key": "date_first_observed",
+                "label": "Date First Observed",
+                "kind": "date",
+                "max_date": "today",
+            },
         ],
     },
     "Corporate Governance & Ownership": {
@@ -75,7 +80,12 @@ FINDING_CATEGORY_SCHEMAS = {
                 "kind": "text",
                 "placeholder": "Hash of the captured page content",
             },
-            {"key": "date_first_observed", "label": "First Observed Date", "kind": "date"},
+            {
+                "key": "date_first_observed",
+                "label": "First Observed Date",
+                "kind": "date",
+                "max_date": "today",
+            },
         ],
     },
     "Social Media & Digital Footprint": {
