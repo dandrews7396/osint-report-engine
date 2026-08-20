@@ -28,7 +28,12 @@ def show_admin_users():
             action_options.append("Update Existing User")
 
         action = st.selectbox("Action", action_options, key="admin_user_action")
-        admin_pw = st.text_input("Your Current Password (Admin)", type="password", key="admin_current_password")
+        admin_pw = st.text_input(
+            "Your Current Password (Admin)",
+            type="password",
+            key="admin_current_password",
+            autocomplete="current-password",
+        )
         st.divider()
 
         if action == "Create New User":
@@ -36,6 +41,7 @@ def show_admin_users():
                 "New Username",
                 key="admin_new_username",
                 help="3-12 letters only. Usernames are saved in lowercase.",
+                autocomplete="username",
             )
             normalized_username = normalize_username(username)
             username_error = validate_username(normalized_username) if username else None
@@ -44,7 +50,12 @@ def show_admin_users():
                 if username_error:
                     st.warning(username_error)
 
-            password = st.text_input("New User Passphrase", type="password", key="admin_new_user_passphrase")
+            password = st.text_input(
+                "New User Passphrase",
+                type="password",
+                key="admin_new_user_passphrase",
+                autocomplete="new-password",
+            )
 
             if st.button("Create User", key="admin_create_user_submit"):
                 user = get_user(admin_user['username'])
@@ -70,11 +81,17 @@ def show_admin_users():
         else:
             user_options = {user["username"]: user["username"] for user in manageable_users}
             target_username = st.selectbox("User to Update", list(user_options.keys()), key="admin_target_username")
-            new_password = st.text_input("New User Passphrase", type="password", key="admin_reset_user_passphrase")
+            new_password = st.text_input(
+                "New User Passphrase",
+                type="password",
+                key="admin_reset_user_passphrase",
+                autocomplete="new-password",
+            )
             confirm_password = st.text_input(
                 "Confirm New User Passphrase",
                 type="password",
                 key="admin_reset_user_passphrase_confirm",
+                autocomplete="new-password",
             )
             action_col, delete_col = st.columns(2)
 

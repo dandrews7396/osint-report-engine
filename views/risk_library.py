@@ -14,7 +14,7 @@ except AttributeError:
 
 def _risk_guidance_editor(value: str, key: str) -> str:
     st.markdown("**Investigative Guidance / Recommended Steps**")
-    st.caption("Provide report-ready guidance and examples of the evidence operators should capture for this risk.")
+    st.caption("Standard operating procedures and investigative guidance to verify and document this finding.")
     return st_jodit(
         value=restore_base64_images(value),
         config={
@@ -63,7 +63,7 @@ def show_risk_library():
                 ]
 
         if not library_items:
-            st.info("No risk vectors found matching the specified criteria.")
+            st.info("No risk templates found matching the specified criteria.")
             return
 
         for item in library_items:
@@ -72,7 +72,7 @@ def show_risk_library():
 
             with st.expander(expander_label, expanded=is_expanded):
                 with st.form(f"edit_risk_form_{item['id']}"):
-                    e_title = st.text_input("Risk Vector Title", value=item['title'])
+                    e_title = st.text_input("Title", value=item['title'])
 
                     col1, col2, col3 = st.columns(3)
                     cat_idx = DOMAIN_CATEGORIES.index(item.get('category')) if item.get('category') in DOMAIN_CATEGORIES else 0
@@ -84,7 +84,7 @@ def show_risk_library():
                     conf_idx = CONFIDENCE_LEVELS.index(item.get('source_confidence', 'High Confidence')) if item.get('source_confidence') in CONFIDENCE_LEVELS else 0
                     e_conf = col3.selectbox("Default Source Confidence", CONFIDENCE_LEVELS, index=conf_idx, key=f"conf_{item['id']}")
 
-                    e_desc = st.text_area("Vector Description", value=item.get('description', '') or '', height=100)
+                    e_desc = st.text_area("Description", value=item.get('description', '') or '', height=100)
                     e_guidance = _risk_guidance_editor(
                         item.get("investigative_guidance", "") or "",
                         f"edit_risk_guidance_{item['id']}",
@@ -103,13 +103,13 @@ def show_risk_library():
                             e_refs
                         )
                         st.session_state.edit_risk_id = None
-                        st.success("Updated risk vector template.")
+                        st.success("Updated risk template.")
                         st.rerun()
 
                 col_del1, _ = st.columns([1, 4])
                 if col_del1.button("Delete Entry", key=f"del_risk_{item['id']}", type="primary"):
                     db.delete_risk_library_item(item['id'])
-                    st.success("Deleted risk vector.")
+                    st.success("Deleted risk template.")
                     st.rerun()
 
     @fragment
@@ -185,16 +185,16 @@ def show_risk_library():
     @fragment
     def render_risk_add_form():
         st.divider()
-        st.subheader("Add Single Risk Vector Template")
+        st.subheader("Add Risk Template")
         with st.form("add_risk_template_form", clear_on_submit=True):
-            a_title = st.text_input("Risk Vector Title", placeholder="e.g., Unsanctified Foreign Entity Registration")
+            a_title = st.text_input("Risk Title", placeholder="e.g., Unsanctified Foreign Entity Registration")
 
             col_a1, col_a2, col_a3 = st.columns(3)
             a_category = col_a1.selectbox("Category", DOMAIN_CATEGORIES)
             a_risk = col_a2.selectbox("Default Risk Level", RISK_LEVELS, index=2)
             a_conf = col_a3.selectbox("Default Source Confidence", CONFIDENCE_LEVELS, index=0)
 
-            a_desc = st.text_area("Vector Description", placeholder="General background and nature of this risk or vulnerability...")
+            a_desc = st.text_area("Description", placeholder="General background and nature of this risk or vulnerability...")
             guidance_editor_key = _new_risk_guidance_editor_key()
             a_guidance = _risk_guidance_editor("", guidance_editor_key)
             a_refs = st.text_area("References & Framework Citations", placeholder="e.g., OSINT Framework, MITRE ATT&CK, Companies House API")

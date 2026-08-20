@@ -241,17 +241,17 @@ def show_manage_findings():
             return
 
         st.divider()
-        with st.expander("Import Vector from Risk Library"):
+        with st.expander("Import Template from Risk Library"):
             risk_library = db.get_risk_library()
             if not risk_library:
-                st.info("No pre-populated risk vectors found in the library.")
+                st.info("No pre-populated risk templates found in the library.")
             else:
                 with st.form("import_from_risk_library"):
                     library_options = {
                         f"[{vector['default_risk_level']}] {vector['title']} ({vector.get('category', 'General')})": vector
                         for vector in risk_library
                     }
-                    selected_vector_label = st.selectbox("Select Threat Vector", list(library_options))
+                    selected_vector_label = st.selectbox("Select Risk Template", list(library_options))
                     imported_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
                     if st.form_submit_button("Import to Case"):
                         vector = library_options[selected_vector_label]
@@ -275,7 +275,7 @@ def show_manage_findings():
                         st.rerun()
 
         st.divider()
-        st.subheader("Add Manual Intelligence Finding")
+        st.subheader("Add Intelligence Finding")
         st.session_state.setdefault("new_finding_category", categories[0])
         new_category = st.selectbox("Domain Category", categories, key="new_finding_category")
         with st.form("add_manual_finding", clear_on_submit=True):

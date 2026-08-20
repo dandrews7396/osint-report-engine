@@ -17,6 +17,7 @@ hide_streamlit_style = """
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
+[data-testid="stSelectbox"] input {cursor: pointer;}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
