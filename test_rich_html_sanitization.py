@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from utils.helpers import sanitize_rich_html
+from utils.helpers import process_base64_images, sanitize_rich_html
 
 
 class RichHtmlSanitizationTests(unittest.TestCase):
@@ -37,6 +38,20 @@ class RichHtmlSanitizationTests(unittest.TestCase):
         self.assertIn('href="https://example.test"', cleaned)
         self.assertIn('rel="noopener noreferrer"', cleaned)
         self.assertIn('colspan="2"', cleaned)
+
+    def test_persists_guidance_images_as_case_assets(self):
+        guidance = '<p><img src="data:image/png;base64,cGl4ZWw="></p>'
+
+        with patch("utils.helpers.os.makedirs"), patch(
+            "utils.helpers.open", unittest.mock.mock_open()
+        ), patch("utils.helpers.os.path.abspath", return_value="/case/assets/pixel.png"):
+            stored = process_base64_images(
+                sanitize_rich_html(guidance),
+                client_id=1,
+                project_id=2,
+            )
+
+        self.assertEqual(stored, '<p><img src="file:///case/assets/pixel.png"></p>')
 
 
 if __name__ == '__main__':

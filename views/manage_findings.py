@@ -96,6 +96,11 @@ def _finding_details_editor(value: str, key: str) -> str:
     )
 
 
+def _new_finding_details_editor_key() -> str:
+    generation = st.session_state.get("new_finding_details_generation", 0)
+    return f"new_finding_details_{generation}"
+
+
 def show_manage_findings():
     @fragment
     def render_findings_page():
@@ -258,7 +263,11 @@ def show_manage_findings():
                             risk_level=vector["default_risk_level"],
                             source_confidence=vector.get("source_confidence", "High Confidence"),
                             summary=vector.get("description", ""),
-                            detailed_findings=sanitize_rich_html(vector.get("investigative_guidance", "")),
+                            detailed_findings=process_base64_images(
+                                sanitize_rich_html(vector.get("investigative_guidance", "")),
+                                active_case["client_id"],
+                                case_id,
+                            ),
                             source=vector.get("refs", ""),
                             category_data={},
                         )
@@ -277,7 +286,8 @@ def show_manage_findings():
             mf_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
             mf_summary = st.text_area("Executive Summary", placeholder="Brief high-level summary of the intelligence item...")
             mf_category_data = _render_finding_category_fields("new", new_category, {}, "new_finding")
-            mf_details = _finding_details_editor("", "new_finding_details")
+            details_editor_key = _new_finding_details_editor_key()
+            mf_details = _finding_details_editor("", details_editor_key)
             mf_source = st.text_input("Source", help="Record the relevant URL, citation, or other source reference.")
 
             if st.form_submit_button("Add Finding") and mf_title:
@@ -298,6 +308,10 @@ def show_manage_findings():
                     category_data=mf_category_data,
                 )
                 _clear_finding_category_widget_state("new", "new_finding")
+                st.session_state.pop(details_editor_key, None)
+                st.session_state["new_finding_details_generation"] = (
+                    st.session_state.get("new_finding_details_generation", 0) + 1
+                )
                 st.session_state["clear_new_finding_category"] = True
                 st.success("Finding successfully added.")
                 st.rerun()

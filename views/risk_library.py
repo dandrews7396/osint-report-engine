@@ -2,12 +2,35 @@ import streamlit as st
 import pandas as pd
 from database import operations as db
 from database.findings import get_domain_category_choices
+from streamlit_jodit import st_jodit
+from utils.helpers import process_base64_images, restore_base64_images, sanitize_rich_html
 
 try:
     fragment = st.fragment
 except AttributeError:
     def fragment(func):
         return func
+
+
+def _risk_guidance_editor(value: str, key: str) -> str:
+    st.markdown("**Investigative Guidance / Recommended Steps**")
+    st.caption("Provide report-ready guidance and examples of the evidence operators should capture for this risk.")
+    return st_jodit(
+        value=restore_base64_images(value),
+        config={
+            "theme": "dark",
+            "style": {"background": "#0e1117", "color": "#ffffff"},
+            "height": 350,
+            "uploader": {"insertImageAsBase64URI": True},
+        },
+        key=key,
+    )
+
+
+def _new_risk_guidance_editor_key() -> str:
+    generation = st.session_state.get("new_risk_guidance_generation", 0)
+    return f"new_risk_guidance_{generation}"
+
 
 def show_risk_library():
     DOMAIN_CATEGORIES = get_domain_category_choices()
@@ -62,7 +85,10 @@ def show_risk_library():
                     e_conf = col3.selectbox("Default Source Confidence", CONFIDENCE_LEVELS, index=conf_idx, key=f"conf_{item['id']}")
 
                     e_desc = st.text_area("Vector Description", value=item.get('description', '') or '', height=100)
-                    e_guidance = st.text_area("Investigative Guidance / Next Steps", value=item.get('investigative_guidance', '') or '', height=120)
+                    e_guidance = _risk_guidance_editor(
+                        item.get("investigative_guidance", "") or "",
+                        f"edit_risk_guidance_{item['id']}",
+                    )
                     e_refs = st.text_area("References & Framework Citations (one per line)", value=item.get('refs', '') or '', height=80)
 
                     if st.form_submit_button("Save Changes"):
@@ -72,7 +98,7 @@ def show_risk_library():
                             e_title,
                             e_risk,
                             e_desc,
-                            e_guidance,
+                            sanitize_rich_html(e_guidance),
                             e_conf,
                             e_refs
                         )
@@ -169,7 +195,8 @@ def show_risk_library():
             a_conf = col_a3.selectbox("Default Source Confidence", CONFIDENCE_LEVELS, index=0)
 
             a_desc = st.text_area("Vector Description", placeholder="General background and nature of this risk or vulnerability...")
-            a_guidance = st.text_area("Investigative Guidance / Recommended Steps", placeholder="Standard operating procedures to investigate, verify, and document this finding...")
+            guidance_editor_key = _new_risk_guidance_editor_key()
+            a_guidance = _risk_guidance_editor("", guidance_editor_key)
             a_refs = st.text_area("References & Framework Citations", placeholder="e.g., OSINT Framework, MITRE ATT&CK, Companies House API")
 
             if st.form_submit_button("Add to Risk Library") and a_title:
@@ -178,9 +205,13 @@ def show_risk_library():
                     title=a_title,
                     default_risk_level=a_risk,
                     description=a_desc,
-                    investigative_guidance=a_guidance,
+                    investigative_guidance=sanitize_rich_html(a_guidance),
                     source_confidence=a_conf,
                     refs=a_refs
+                )
+                st.session_state.pop(guidance_editor_key, None)
+                st.session_state["new_risk_guidance_generation"] = (
+                    st.session_state.get("new_risk_guidance_generation", 0) + 1
                 )
                 st.success(f"Added '{a_title}' to the OSINT Risk Library!")
                 st.rerun()
