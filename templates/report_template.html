@@ -20,6 +20,16 @@
                 font-size: 7.5pt;
                 color: #64748b;
             }
+            {% if report.status == 'draft' %}
+            @top-center {
+                content: "DRAFT";
+                font-family: "Segoe UI", Arial, sans-serif;
+                font-size: 24pt;
+                font-weight: 800;
+                letter-spacing: 8px;
+                color: #cbd5e1;
+            }
+            {% endif %}
         }
 
         :root {
@@ -316,5 +326,16 @@
 </head>
 <body>
     {{ body | safe }}
+    {% if report.is_final %}
+    <section class="approval-signoff">
+        <h2>Final Approval</h2>
+        <table class="signoff-table">
+            <tr><td><strong>Approved by:</strong> {{ report.approval.approved_by }}</td></tr>
+            {% if report.approval.title %}<tr><td><strong>Title:</strong> {{ report.approval.title }}</td></tr>{% endif %}
+            <tr><td><strong>Approved on:</strong> {{ report.approval.approved_at }}</td></tr>
+            {% if report.approval.signature %}<tr><td><strong>Signoff:</strong> {{ report.approval.signature }}</td></tr>{% endif %}
+        </table>
+    </section>
+    {% endif %}
 </body>
 </html>

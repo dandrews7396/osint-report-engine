@@ -1,6 +1,8 @@
 import os
+
 import streamlit as st
 from database import operations as db
+from utils.auth import require_role_page_auth
 
 try:
     fragment = st.fragment
@@ -76,8 +78,9 @@ def restore_files_dialog():
 def show_settings():
     @fragment
     def render_settings():
-        st.title("Settings")
-        st.write("Manage firm details, investigators, and recovery tools.")
+        require_role_page_auth("administrator")
+        st.title("Application Settings")
+        st.write("Manage firm-wide application settings and recovery tools.")
 
         settings = db.get_settings()
         with st.form("firm_settings_form"):
@@ -95,40 +98,6 @@ def show_settings():
                 db.update_setting("default_report_include_risk_graphs", str(risk_graph_default).lower())
                 st.success("Firm settings updated.")
                 st.rerun()
-
-        st.divider()
-        st.subheader("Investigative Team")
-        investigators = db.get_investigators()
-        if investigators:
-            for inv in investigators:
-                with st.expander(f"{inv['name']}"):
-                    with st.form(f"edit_inv_{inv['id']}"):
-                        col_t1, col_t2 = st.columns(2)
-                        e_inv_name = col_t1.text_input("Name", value=inv.get("name", ""))
-                        e_inv_title = col_t2.text_input("Title", value=inv.get("title", "") or "")
-                        e_inv_creds = st.text_input("Credentials / Certifications", value=inv.get("credentials", "") or "")
-                        e_inv_bio = st.text_area("Bio / Professional Background", value=inv.get("bio", "") or "")
-                        if st.form_submit_button("Save Changes"):
-                            db.update_investigator(inv["id"], e_inv_name, e_inv_title, e_inv_creds, e_inv_bio)
-                            st.success("Investigator updated.")
-                            st.rerun()
-                    if st.button("Delete Investigator", key=f"del_inv_{inv['id']}"):
-                        db.delete_investigator(inv["id"])
-                        st.rerun()
-        else:
-            st.info("No investigators added yet.")
-
-        with st.expander("Add New Investigator"):
-            with st.form("add_investigator", clear_on_submit=True):
-                col_t1, col_t2 = st.columns(2)
-                inv_name = col_t1.text_input("Name")
-                inv_title = col_t2.text_input("Title")
-                inv_creds = st.text_input("Credentials / Certifications", placeholder="e.g., CIFI, OSINT-S, CII")
-                inv_bio = st.text_area("Bio / Professional Background")
-                if st.form_submit_button("Add Investigator") and inv_name:
-                    db.add_investigator(inv_name, inv_title, inv_creds, inv_bio)
-                    st.success("Added investigator.")
-                    st.rerun()
 
         st.divider()
         st.subheader("Data Recovery")

@@ -1,291 +1,402 @@
-import streamlit as st
 import json
-import html
-from datetime import date
+import re
+from datetime import datetime
+
+import streamlit as st
+
 from database import operations as db
+from utils.auth import get_current_user, require_page_auth, user_has_role
+from utils.helpers import format_lifecycle_status
 
-try:
-    fragment = st.fragment
-except AttributeError:
-    def fragment(func):
-        return func
 
-@st.dialog("Confirm Deletion")
-def delete_case_dialog(case_id, case_name):
-    st.warning(f"Are you sure you want to delete Case '{case_name}'? This action cannot be undone.")
-    col1, col2 = st.columns(2)
-    if col1.button("Yes, Delete", type="primary", use_container_width=True):
-        db.delete_case(case_id)
-        if st.session_state.get("active_case_id") == case_id:
-            st.session_state.pop("active_case_id", None)
-            st.session_state.pop("edit_subject_id", None)
-            st.session_state.pop("edit_finding_id", None)
-        st.rerun()
-    if col2.button("Cancel", use_container_width=True):
-        st.rerun()
-def show_manage_cases():
-    @fragment
-    def render_manage_cases():
-        st.title("Manage Intelligence Cases")
-        st.write("Create and edit OSINT cases for your active client. Define case parameters, primary targets, legal/GDPR legitimate interest justification, assigned investigators, and intelligence tools.")
+CASE_TYPES = (
+    "Enhanced Due Diligence", "Executive Threat Assessment", "Asset Tracing & Recovery",
+    "Brand Protection & Anti-Counterfeiting", "Insider Threat Investigation",
+    "Fraud & Financial Crime Investigation", "Person Profile", "Custom OSINT Investigation",
+)
 
+
+def _state(case: dict) -> str:
+    return case.get("lifecycle_status", "preparation")
+
+
+def _assigned(case: dict, user: dict) -> bool:
+    return (
+        case.get("lead_investigator_id") == user.get("id")
+        or case.get("investigator_name") in {user.get("username"), user.get("display_name")}
+    )
+
+
+def _workflow_cases() -> list[dict]:
+    """Prefer the actor-aware workflow projection while retaining legacy read compatibility."""
+    getter = getattr(db, "get_cases_with_workflow", None)
+    return getter() if callable(getter) else db.get_cases()
+
+
+def _case_age_days(case: dict) -> int | None:
+    try:
+        return max(0, (datetime.now() - datetime.fromisoformat(case["created_at"])).days)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _case_created_sort_key(case: dict) -> str:
+    return case.get("created_at") or "9999-12-31T23:59:59"
+
+
+def _save_case(case: dict, values: dict) -> None:
+    db.update_case(
+        case_id=case["id"],
+        case_ref=values["ref"],
+        case_name=values["name"],
+        case_type=values["type"],
+        start_date=case.get("start_date") or "",
+        end_date=case.get("end_date") or "",
+        report_date=case.get("report_date") or "",
+        target_scope=values["scope"],
+        legitimate_interest_assessment=values["interest"],
+        executive_assessment=values["executive"],
+        key_findings_summary=values["findings"],
+        covert_persona_reference=values["persona"],
+        tools_and_sources_used=values["tools"],
+    )
+
+
+def _tool_rows(value: str | None) -> list[dict[str, str]]:
+    if not value:
+        return [{"Name": "", "Description": ""}]
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        return [{"Name": "", "Description": ""}]
+    if not isinstance(decoded, list):
+        return [{"Name": "", "Description": ""}]
+    rows = [
+        {
+            "Name": str(item.get("Name", "")),
+            "Description": str(item.get("Description", "")),
+        }
+        for item in decoded
+        if isinstance(item, dict)
+    ]
+    return rows or [{"Name": "", "Description": ""}]
+
+
+def _parse_persona_references(value: str) -> list[str]:
+    return list(dict.fromkeys(
+        reference.upper()
+        for reference in re.split(r"[\s,]+", value.strip())
+        if reference
+    ))
+
+
+def _manager_case_form(case: dict, investigators: list[dict], user: dict) -> None:
+    investigator_names = ["Unassigned"] + [person["name"] for person in investigators]
+    current = case.get("investigator_name") or "Unassigned"
+    index = investigator_names.index(current) if current in investigator_names else 0
+
+    with st.form(f"manager_case_{case['id']}"):
+        st.markdown("### Case Details")
+        first, second = st.columns(2)
+        ref = first.text_input("Case reference", value=case.get("case_ref") or "")
+        name = second.text_input("Operation Name", value=case["case_name"])
+        case_type = st.selectbox(
+            "Case type",
+            CASE_TYPES,
+            index=CASE_TYPES.index(case["case_type"]) if case.get("case_type") in CASE_TYPES else 0,
+        )
+
+        st.markdown("### Tasking & Assignment")
+        scope = st.text_area("Tasking specification", value=case.get("target_scope") or "", height=100)
+        selected_name = st.selectbox("Lead investigator", investigator_names, index=index)
+
+        if st.form_submit_button("Save Case Details"):
+            investigator = next((person for person in investigators if person["name"] == selected_name), {})
+            _save_case(
+                case,
+                {
+                    "ref": ref,
+                    "name": name,
+                    "type": case_type,
+                    "scope": scope,
+                    "interest": case.get("legitimate_interest") or "",
+                    "executive": case.get("executive_summary") or "",
+                    "findings": case.get("key_findings_summary") or "",
+                    "persona": case.get("covert_persona_reference") or "",
+                    "tools": case.get("tools_used") or "[]",
+                },
+            )
+            assign = getattr(db, "assign_case_lead_investigator", None)
+            if callable(assign):
+                assign(case["id"], investigator.get("user_id"), actor_user_id=user["id"])
+            st.session_state.pop("edit_case_id", None)
+            st.rerun()
+
+
+def _investigator_case_form(case: dict) -> None:
+    """Investigators maintain deployment information, case summaries, and operational tooling."""
+    with st.form(f"investigator_narrative_{case['id']}"):
+        st.markdown("### Deployment Information")
+        interest = st.text_area("Legal Authority", value=case.get("legitimate_interest") or "", height=100)
+        allocated_personas = db.get_case_persona_references(case["id"])
+        if allocated_personas:
+            st.table(
+                [
+                    {
+                        "Persona Reference": persona["persona_reference"],
+                        "Allocated": persona["allocated_at"],
+                    }
+                    for persona in allocated_personas
+                ]
+            )
+        else:
+            st.caption("No persona references have been allocated to this case.")
+        persona_references = st.text_input(
+            "Add Persona References",
+            help="Separate references with commas or spaces. Allocated references cannot be changed or removed.",
+        )
+
+        st.markdown("### Case Summary")
+        executive = st.text_area("Executive Summary", value=case.get("executive_summary") or "", height=120)
+        findings = st.text_area(
+            "Key Findings and Recommendations",
+            value=case.get("key_findings_summary") or "",
+            height=120,
+        )
+
+        st.markdown("#### OSINT Tools & Platforms Utilised")
+        edited_tools = st.data_editor(
+            _tool_rows(case.get("tools_used")),
+            column_config={
+                "Name": st.column_config.TextColumn("Tool / Platform Name", width="medium", required=True),
+                "Description": st.column_config.TextColumn("Purpose / Usage Description", width="large", required=True),
+            },
+            num_rows="dynamic",
+            use_container_width=True,
+            key=f"tools_{case['id']}",
+        )
+
+        if st.form_submit_button("Save Case Summary"):
+            new_persona_references = _parse_persona_references(persona_references)
+            if new_persona_references:
+                try:
+                    db.add_case_persona_references(case["id"], new_persona_references)
+                except ValueError as exc:
+                    st.error(str(exc))
+                    return
+            tools = [
+                {"Name": row["Name"], "Description": row["Description"]}
+                for row in edited_tools
+                if row.get("Name") or row.get("Description")
+            ]
+            _save_case(
+                case,
+                {
+                    "ref": case["case_ref"],
+                    "name": case["case_name"],
+                    "type": case.get("case_type", CASE_TYPES[0]),
+                    "scope": case.get("target_scope") or "",
+                    "interest": interest,
+                    "executive": executive,
+                    "findings": findings,
+                    "persona": case.get("covert_persona_reference") or "",
+                    "tools": json.dumps(tools),
+                },
+            )
+            st.session_state.pop("edit_case_id", None)
+            st.rerun()
+
+
+def _render_case_details(case: dict) -> None:
+    st.caption(f"Type: {case.get('case_type', 'Unspecified')}")
+    st.write(f"**Lead investigator:** {case.get('investigator_name') or 'Unassigned'}")
+    if case.get("investigation_started_at"):
+        st.write(f"**Investigation started:** {case['investigation_started_at']}")
+    if case.get("target_scope"):
+        st.write(f"**Tasking:** {case['target_scope']}")
+
+
+def _set_active_case(case_id: int) -> None:
+    st.session_state.active_case_id = case_id
+    st.session_state.pop("edit_subject_id", None)
+    st.session_state.pop("edit_finding_id", None)
+    st.session_state.nav = "Manage Subjects"
+    st.rerun()
+
+
+def show_manage_cases() -> None:
+    require_page_auth()
+    user = get_current_user()
+    if not user:
+        return
+    if user_has_role(user, "administrator"):
+        st.error("Administrators do not have access to operational case work.")
+        return
+
+    manager = user_has_role(user, "manager")
+    st.title("Case Management")
+    cases = _workflow_cases()
+    visible = (
+        cases
+        if manager
+        else [
+            case
+            for case in cases
+            if _assigned(case, user) and _state(case) != "completed"
+        ]
+    )
+    if not manager:
+        st.info("Only cases assigned to you are shown. Manager-controlled fields are read-only.")
+
+    investigators = db.get_investigators() if manager else []
+    edit_case_id = st.session_state.get("edit_case_id")
+    if not manager and any(
+        case["id"] == edit_case_id and _state(case) == "completed"
+        for case in cases
+    ):
+        st.session_state.pop("edit_case_id", None)
+        edit_case_id = None
+    grouped_cases: dict[str, dict[str, list[dict]]] = {}
+    for case in visible:
+        client_name = case.get("client_name") or "Unknown Client"
+        grouped_cases.setdefault(client_name, {}).setdefault(_state(case), []).append(case)
+
+    status_order = ("preparation", "in_progress", "submitted", "rejected", "completed")
+    editing_case = next(
+        (
+            case
+            for cases_for_client in grouped_cases.values()
+            for cases_for_status in cases_for_client.values()
+            for case in cases_for_status
+            if case["id"] == edit_case_id
+        ),
+        None,
+    )
+    editing_client_name = editing_case.get("client_name") if editing_case else None
+    editing_status = _state(editing_case) if editing_case else None
+    for client_name in sorted(
+        grouped_cases,
+        key=lambda name: name == editing_client_name,
+    ):
+        st.subheader(client_name)
+        status_groups = grouped_cases[client_name]
+        for status in sorted(
+            status_order,
+            key=lambda state: state == editing_status,
+        ):
+            cases_for_status = status_groups.get(status, [])
+            if not cases_for_status:
+                continue
+            st.markdown(f"##### {format_lifecycle_status(status)} ({len(cases_for_status)})")
+            for case in sorted(
+                cases_for_status,
+                key=lambda case: (case["id"] == edit_case_id, _case_created_sort_key(case)),
+            ):
+                age_days = _case_age_days(case)
+                age_label = f"{age_days} day{'s' if age_days != 1 else ''}" if age_days is not None else "Unknown age"
+                active_marker = " (Active)" if st.session_state.get("active_case_id") == case["id"] else ""
+                title = (
+                    f"[{case.get('case_ref', 'NO-REF')}] {case['case_name']} "
+                    f"(Client: {client_name}) — {format_lifecycle_status(status)} • {age_label}{active_marker}"
+                )
+                is_editing = edit_case_id == case["id"]
+                if is_editing:
+                    st.markdown(f"#### {title}")
+                    st.caption("Editing is locked open until you save or cancel.")
+                    item_container = st.container()
+                else:
+                    item_container = st.expander(title, expanded=False)
+                with item_container:
+                    if is_editing:
+                        if manager:
+                            _manager_case_form(case, investigators, user)
+                        else:
+                            _investigator_case_form(case)
+                        if st.button("Cancel Edit", key=f"cancel_case_{case['id']}"):
+                            st.session_state.pop("edit_case_id", None)
+                            st.rerun()
+                        continue
+
+                    _render_case_details(case)
+                    if not manager and _state(case) in {"preparation", "rejected"}:
+                        action = "Start assigned investigation" if _state(case) == "preparation" else "Resume investigation"
+                        if st.button(action, key=f"start_{case['id']}", type="primary"):
+                            try:
+                                db.transition_case_lifecycle(case["id"], "in_progress", actor_user_id=user["id"])
+                            except ValueError as exc:
+                                st.error(f"Unable to start this case: {exc}")
+                            else:
+                                st.rerun()
+
+                    action_columns = st.columns(3 if manager else 2)
+                    if action_columns[0].button("Edit Case", key=f"edit_case_{case['id']}", use_container_width=True):
+                        st.session_state.edit_case_id = case["id"]
+                        st.rerun()
+                    if action_columns[1].button("Set Active", key=f"active_case_{case['id']}", use_container_width=True):
+                        _set_active_case(case["id"])
+                    if manager and action_columns[2].button(
+                        "Delete Case",
+                        key=f"delete_case_{case['id']}",
+                        use_container_width=True,
+                    ):
+                        db.delete_case(case["id"])
+                        if st.session_state.get("active_case_id") == case["id"]:
+                            st.session_state.pop("active_case_id", None)
+                        st.rerun()
+
+    if st.session_state.get("edit_case_id") is not None:
+        return
+
+    if manager:
+        st.divider()
+        st.subheader("Create Case")
         clients = db.get_clients()
         if not clients:
-            st.warning("Please create a client on the Dashboard first.")
+            st.info("Create a client before opening a case.")
             return
-
-        client_options = {c['name']: c['id'] for c in clients}
-        active_client_id = st.session_state.get('active_client_id')
-        if active_client_id not in client_options.values():
-            active_client_id = clients[0]['id']
-            st.session_state.active_client_id = active_client_id
-
-        active_client_name = next(c['name'] for c in clients if c['id'] == active_client_id)
-
-        CASE_TYPES = [
-            "Enhanced Due Diligence",
-            "Executive Threat Assessment",
-            "Asset Tracing & Recovery",
-            "Brand Protection & Anti-Counterfeiting",
-            "Insider Threat Investigation",
-            "Fraud & Financial Crime Investigation",
-            "Person Profile",
-            "Custom OSINT Investigation"
-        ]
-
-        investigators = db.get_investigators()
-        investigator_options = {"No Investigator": {"name": "", "title": "", "credentials": "", "bio": ""}}
-        if investigators:
-            for inv in investigators:
-                investigator_options[inv['name']] = inv
-
-        st.subheader(f"Active Cases for {active_client_name}")
-        cases = db.get_cases()
-        active_client_cases = [c for c in cases if c['client_id'] == active_client_id]
-        edit_case_id = st.session_state.get('edit_case_id')
-        active_case_id = st.session_state.get("active_case_id")
-
-        if not active_client_cases:
-            st.info("*No cases found for this client. Create a new case below.*")
-        for c in active_client_cases:
-            is_editing = edit_case_id == c['id']
-            is_active = active_case_id == c["id"]
-            case_label = (
-                f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} "
-                f"(Client: {c['client_name']}){' (Active)' if is_active else ''}"
-            )
-
-            if is_editing:
-                st.markdown(f"#### {case_label}")
-                st.caption("Editing is locked open until you save or cancel.")
-                item_container = st.container()
-            else:
-                item_container = st.expander(case_label)
-
-            with item_container:
-                if is_editing:
-                    with st.form(f"edit_case_{c['id']}"):
-                        col_c1, col_c2 = st.columns(2)
-                        ec_ref = col_c1.text_input("Case Reference Number", value=c.get('case_ref', ''))
-                        ec_name = col_c2.text_input("Case Name", value=c['case_name'])
-
-                        ec_type_idx = CASE_TYPES.index(c.get('case_type', 'Enhanced Due Diligence')) if c.get('case_type') in CASE_TYPES else 0
-                        ec_type = st.selectbox("Case Type", CASE_TYPES, index=ec_type_idx)
-
-                        col_s, col_e, col_r = st.columns(3)
-                        ec_start = col_s.date_input(
-                            "Start Date",
-                            value=date.fromisoformat(c["start_date"]),
-                            format="YYYY-MM-DD",
-                            key=f"edit_case_start_date_{c['id']}",
-                        ).isoformat()
-                        ec_end = col_e.date_input(
-                            "End Date",
-                            value=date.fromisoformat(c["end_date"]),
-                            format="YYYY-MM-DD",
-                            key=f"edit_case_end_date_{c['id']}",
-                        ).isoformat()
-                        ec_report_date = col_r.date_input(
-                            "Report Date",
-                            value=date.fromisoformat(c["report_date"]),
-                            format="YYYY-MM-DD",
-                            key=f"edit_case_report_date_{c['id']}",
-                        ).isoformat()
-
-                        st.markdown("### Tasking & Legal Framework")
-                        ec_tasking = st.text_area("Tasking Specification (Entities, Individuals, Domains, Handles)", value=c.get('target_scope', '') or '', height=100)
-                        ec_gdpr = st.text_area("UK GDPR / Legitimate Interest Statement", value=c.get('legitimate_interest', '') or '', height=100, help="Document the lawful basis and necessity for processing personal data under UK GDPR.")
-
-                        st.markdown("### Assignment & Narrative")
-                        ec_inv_idx = 0
-                        ec_inv_name = c.get('investigator_name', '')
-                        inv_names = list(investigator_options.keys())
-                        if ec_inv_name in inv_names:
-                            ec_inv_idx = inv_names.index(ec_inv_name)
-
-                        ec_inv = st.selectbox("Lead Investigator", inv_names, index=ec_inv_idx)
-                        ec_covert_persona_reference = st.text_input(
-                            "Covert Persona Reference",
-                            value=c.get('covert_persona_reference', '') or '',
-                            help="Optional, user-editable reference used in the report header for the persona or operating identity associated with this case.",
-                        )
-                        ec_exec_summary = st.text_area("Executive Summary", value=c.get('executive_summary', '') or '', height=120)
-                        ec_key_findings = st.text_area("Key Intelligence Findings Summary", value=c.get('key_findings_summary', '') or '', height=120)
-
-                        st.markdown("#### OSINT Tools & Platforms Utilised")
-                        tools_str = c.get('tools_used', '[]')
-                        try:
-                            t_list = json.loads(tools_str)
-                            if not isinstance(t_list, list):
-                                t_list = [{"Name": "Tool", "Description": tools_str}]
-                        except Exception:
-                            t_list = [{"Name": "Unknown Tool", "Description": tools_str}] if tools_str else []
-
-                        if not t_list:
-                            t_list = [{"Name": "", "Description": ""}]
-
-                        edited_t_list = st.data_editor(
-                            t_list,
-                            column_config={
-                                "Name": st.column_config.TextColumn("Tool / Platform Name", width="medium", required=True),
-                                "Description": st.column_config.TextColumn("Purpose / Usage Description", width="large", required=True)
-                            },
-                            num_rows="dynamic",
-                            use_container_width=True,
-                            key=f"te_{c['id']}"
-                        )
-
-                        save_as_default = st.checkbox("Save legal statement and tool configuration as Firm Defaults", key=f"sad_{c['id']}")
-
-                        if st.form_submit_button("Save Case Details"):
-                            cleaned_t_list = [t for t in edited_t_list if t.get("Name") or t.get("Description")]
-                            t_used_json = json.dumps(cleaned_t_list)
-                            selected_inv = investigator_options[ec_inv]
-
-                            db.update_case(
-                                case_id=c['id'],
-                                case_ref=ec_ref,
-                                case_name=ec_name,
-                                case_type=ec_type,
-                                start_date=ec_start,
-                                end_date=ec_end,
-                                report_date=ec_report_date,
-                                lead_investigator=selected_inv['name'],
-                                investigator_description=selected_inv['bio'],
-                                target_scope=ec_tasking,
-                                legitimate_interest_assessment=ec_gdpr,
-                                executive_assessment=ec_exec_summary,
-                                key_findings_summary=ec_key_findings,
-                                covert_persona_reference=ec_covert_persona_reference,
-                                tools_and_sources_used=t_used_json
-                            )
-
-                            if save_as_default:
-                                db.update_setting('default_legitimate_interest', ec_gdpr)
-                                db.update_setting('tools_used', t_used_json)
-
-                            st.session_state.edit_case_id = None
-                            st.success("Case updated!")
-                            st.rerun()
-
-                    if st.button("Cancel Edit", key=f"cancel_case_{c['id']}"):
-                        st.session_state.edit_case_id = None
-                        st.rerun()
+        client_options = {client["name"]: client["id"] for client in clients}
+        with st.form("new_manager_case", clear_on_submit=True):
+            client_name = st.selectbox("Client", list(client_options))
+            ref, name = st.columns(2)
+            case_ref = ref.text_input("Case reference")
+            case_name = name.text_input("Operation Name")
+            case_type = st.selectbox("Case type", CASE_TYPES)
+            if st.form_submit_button("Prepare Case"):
+                if not case_ref.strip() or not case_name.strip():
+                    st.error("Case reference and case name are required.")
                 else:
-                    st.caption(f"Type: {c.get('case_type', 'Unspecified')}")
-                    st.write(f"**Lead Investigator:** {c.get('investigator_name', 'Unassigned') or 'Unassigned'}")
-                    st.write(
-                        f"**Timeline:** {c.get('start_date', 'N/A') or 'N/A'} to {c.get('end_date', 'N/A') or 'N/A'} "
-                        f"(Report date: {c.get('report_date', 'N/A') or 'N/A'})"
-                    )
-                    if c.get('target_scope'):
-                        st.write(f"**Tasking:** {c['target_scope']}")
-
-                    col1, col2, col3 = st.columns(3)
-                    if col1.button("Edit Case", key=f"edit_case_btn_{c['id']}", use_container_width=True):
-                        st.session_state.edit_case_id = c['id']
-                        st.rerun()
-                    if col2.button("Set Active", key=f"active_case_{c['id']}", use_container_width=True):
-                        st.session_state.active_case_id = c["id"]
-                        st.session_state.pop("edit_subject_id", None)
-                        st.session_state.pop("edit_finding_id", None)
-                        st.session_state.nav = "Manage Subjects"
-                        st.rerun()
-                    if col3.button("Delete Case", key=f"del_case_{c['id']}", use_container_width=True):
-                        delete_case_dialog(c['id'], c['case_name'])
-
-        if edit_case_id is None:
-            st.divider()
-            st.subheader("Add New Case")
-            with st.form("add_case", clear_on_submit=True):
-                st.markdown(
-                    f"""
-                    <div class="add-case-context-banner">
-                        &nbsp; Opening new case under client <strong>{html.escape(active_client_name)}</strong>
-                    </div>
-                    <style>
-                    .add-case-context-banner {{
-                        background-color: rgba(28, 131, 225, 0.1);
-                        padding: 0.75rem 1rem;
-                        border-radius: 0.5rem;
-                        margin-bottom: 1rem;
-                        animation: add-case-banner-fade-out 0.4s ease-in 4.6s forwards;
-                    }}
-                    @keyframes add-case-banner-fade-out {{
-                        to {{
-                            opacity: 0;
-                            height: 0;
-                            padding-top: 0;
-                            padding-bottom: 0;
-                            margin-bottom: 0;
-                            overflow: hidden;
-                        }}
-                    }}
-                    </style>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                col_nc1, col_nc2 = st.columns(2)
-                c_ref = col_nc1.text_input("Case Reference Number", placeholder="e.g., CAS-2026-001")
-                c_name = col_nc2.text_input("Case Name", placeholder="e.g., Operation Vanguard")
-
-                c_type = st.selectbox("Case Type", CASE_TYPES)
-                c_inv = st.selectbox("Lead Investigator", list(investigator_options.keys()))
-                c_covert_persona_reference = st.text_input(
-                    "Covert Persona Reference",
-                    key="new_case_covert_persona_reference",
-                    placeholder="e.g., Persona-12 / Alias / Operating identity",
-                    help="Optional reference used in the report header for the covert persona or operating identity associated with this case.",
-                )
-
-                col_s, col_e, col_r = st.columns(3)
-                c_start = col_s.date_input("Start Date").strftime('%Y-%m-%d')
-                c_end = col_e.date_input("End Date").strftime('%Y-%m-%d')
-                c_report_date = col_r.date_input("Report Date").strftime('%Y-%m-%d')
-
-                if st.form_submit_button("Add Case") and c_name:
-                    settings = db.get_settings()
-                    selected_inv = investigator_options[c_inv]
-
-                    new_id = db.add_case(
-                        case_ref=c_ref,
-                        case_name=c_name,
-                        client_id=active_client_id,
-                        case_type=c_type,
-                        start_date=c_start,
-                        end_date=c_end,
-                        report_date=c_report_date,
-                        lead_investigator=selected_inv['name'],
-                        investigator_description=selected_inv['bio'],
-                        target_scope='',
-                        legitimate_interest_assessment=settings.get('default_legitimate_interest', ''),
-                        executive_assessment='',
-                        key_findings_summary='',
-                        covert_persona_reference=c_covert_persona_reference,
-                        tools_and_sources_used=settings.get('tools_used', '')
-                    )
-                    st.session_state.edit_case_id = new_id
-                    st.success(f"Successfully created case: {c_name}")
+                    db.add_case(case_ref.strip(), case_name.strip(), client_options[client_name], case_type=case_type)
                     st.rerun()
-
-    render_manage_cases()
+    else:
+        st.divider()
+        st.subheader("Create Assigned Case")
+        create_assigned = getattr(db, "create_assigned_case", None)
+        if not callable(create_assigned):
+            st.info("Investigator case creation is not available.")
+            return
+        clients = db.get_clients()
+        if not clients:
+            st.info("No clients are available.")
+            return
+        client_options = {client["name"]: client["id"] for client in clients}
+        with st.form("new_investigator_case", clear_on_submit=True):
+            client_name = st.selectbox("Client", list(client_options))
+            case_ref = st.text_input("Case reference")
+            case_name = st.text_input("Operation Name")
+            case_type = st.selectbox("Case type", CASE_TYPES)
+            if st.form_submit_button("Create assigned preparation case"):
+                if not case_ref.strip() or not case_name.strip():
+                    st.error("Case reference and case name are required.")
+                else:
+                    try:
+                        create_assigned(
+                            case_ref=case_ref.strip(),
+                            case_name=case_name.strip(),
+                            client_id=client_options[client_name],
+                            case_type=case_type,
+                            actor_user_id=user["id"],
+                        )
+                    except ValueError as exc:
+                        st.error(f"Unable to create case: {exc}")
+                    else:
+                        st.rerun()

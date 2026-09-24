@@ -2,6 +2,7 @@ from pathlib import Path
 
 import streamlit as st
 from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 from database import operations as db
 from database.db import init_db
 import secrets
@@ -16,23 +17,26 @@ from database.db import get_user
 TOKEN_TTL_SECONDS = 6 * 3600
 
 ph = PasswordHasher()
+VALID_ROLES = frozenset({"administrator", "manager", "investigator"})
 
 
 def clear_authenticated_session() -> None:
     st.session_state.logged_in = False
     st.session_state.pop('username', None)
     st.session_state.pop('is_admin', None)
+    st.session_state.pop('role', None)
 
 
 def hydrate_authenticated_session(username: str) -> bool:
     user = get_user(username)
-    if not user:
+    if not user or not bool(user.get("active", True)):
         clear_authenticated_session()
         return False
 
     st.session_state.logged_in = True
     st.session_state.username = user['username']
-    st.session_state.is_admin = bool(user.get('is_admin'))
+    st.session_state.role = user.get("role", "administrator" if user.get("is_admin") else "investigator")
+    st.session_state.is_admin = st.session_state.role == "administrator"
     return True
 
 
@@ -42,17 +46,64 @@ def get_current_user():
         return None
 
     user = get_user(username)
-    if not user:
+    if not user or not bool(user.get("active", True)):
         clear_authenticated_session()
         return None
 
-    st.session_state.is_admin = bool(user.get('is_admin'))
+    st.session_state.role = user.get("role", "administrator" if user.get("is_admin") else "investigator")
+    st.session_state.is_admin = st.session_state.role == "administrator"
     return user
 
 
 def current_user_is_admin() -> bool:
     user = get_current_user()
-    return bool(user and user.get('is_admin'))
+    return bool(user and user.get("role", "administrator" if user.get("is_admin") else "") == "administrator")
+
+
+def user_has_role(user: dict | None, *roles: str) -> bool:
+    """Return whether an active user has any requested role."""
+    if not user or not bool(user.get("active", True)):
+        return False
+    if not set(roles).issubset(VALID_ROLES):
+        raise ValueError("Unknown role requested.")
+    role = user.get("role", "administrator" if user.get("is_admin") else "investigator")
+    return role in roles
+
+
+def current_user_has_role(*roles: str) -> bool:
+    return user_has_role(get_current_user(), *roles)
+
+
+def require_role_page_auth(*roles: str):
+    require_page_auth()
+    user = get_current_user()
+    if not user_has_role(user, *roles):
+        st.error("You do not have permission to access this page.")
+        st.stop()
+    return user
+
+
+def validate_password_confirmation(password: str, confirmation: str) -> str | None:
+    """Validate a password entry pair without exposing either value."""
+    if not password:
+        return "Password is required."
+    if password != confirmation:
+        return "Password confirmation does not match."
+    return None
+
+
+def password_confirmation_matches(password: str, confirmation: str) -> bool:
+    return validate_password_confirmation(password, confirmation) is None
+
+
+def verify_current_password(user: dict, password: str) -> bool:
+    """Verify a re-authentication password without exposing verification failures."""
+    if not user or not password:
+        return False
+    try:
+        return ph.verify(user["password_hash"], password)
+    except (KeyError, VerifyMismatchError):
+        return False
 
 def get_cookie_controller():
     if 'cookie_controller' not in st.session_state:

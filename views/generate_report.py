@@ -1,218 +1,231 @@
+from html import escape
+
 import streamlit as st
-import os
-import base64
+
 from database import operations as db
-from reporting.generator import generate_report, generate_attestation
+from reporting.generator import generate_report
+from reporting.versioning import build_versioned_output_path, sha256_file, verify_file_sha256
+from utils.auth import get_current_user, require_page_auth, user_has_role, verify_current_password
+from views.report_document import render_report_document_actions
 
-try:
-    fragment = st.fragment
-except AttributeError:
-    def fragment(func):
-        return func
 
-def show_generate_report():
-    @fragment
-    def render_generate_report_page():
-        st.title("Generate Intelligence Deliverables")
-        st.write("Compile all case metadata, target specifications, legal declarations, and verified intelligence findings into professional PDF deliverables.")
+def _assigned(case: dict, user: dict) -> bool:
+    return case.get("lead_investigator_id") == user.get("id")
 
-        def render_case_selector():
-            cases = db.get_cases()
-            active_client_id = st.session_state.get('active_client_id')
-            if active_client_id:
-                cases = [c for c in cases if c['client_id'] == active_client_id]
 
-            if not cases:
-                st.warning("Please create a case for the active client first.")
-                st.session_state.pop('generate_report_case', None)
-                return
-
-            case_options = {f"[{c.get('case_ref', 'NO-REF')}] {c['case_name']} (Client: {c['client_name']})": c for c in cases}
-            case_options_list = list(case_options.keys())
-            default_index = 0
-            if 'generate_report_case_id' not in st.session_state:
-                if 'active_case_id' in st.session_state:
-                    st.session_state.generate_report_case_id = st.session_state.active_case_id
-                elif 'edit_case_id' in st.session_state:
-                    st.session_state.generate_report_case_id = st.session_state.edit_case_id
-                elif cases:
-                    st.session_state.generate_report_case_id = cases[0]['id']
-
-            for i, c_name in enumerate(case_options_list):
-                if case_options[c_name]['id'] == st.session_state.generate_report_case_id:
-                    default_index = i
-                    break
-
-            selected_cname = st.selectbox(
-                "Select Case for Report",
-                case_options_list,
-                index=default_index,
-                key="generate_report_selected_case_name",
+def _render_readiness(case: dict, subjects: list[dict], findings: list[dict]) -> None:
+    checks = (
+        ("Tasking", bool((case.get("target_scope") or "").strip())),
+        ("Legal authority", bool((case.get("legitimate_interest_assessment") or "").strip())),
+        ("Personas", bool(db.get_case_persona_references(case["id"]))),
+        ("Summary", bool((case.get("executive_assessment") or "").strip())),
+        ("Recommendations", bool((case.get("key_findings_summary") or "").strip())),
+        ("Tools", bool((case.get("tools_and_sources_used") or "").strip())),
+    )
+    with st.container(border=True):
+        st.markdown("#### Report Readiness")
+        columns = st.columns(4)
+        for index, (label, complete) in enumerate(checks):
+            colour = "#198754" if complete else "#c9302c"
+            icon = "✓" if complete else "✕"
+            columns[index % 4].markdown(
+                f'<span style="color: {colour}; font-weight: 600;">{icon} {escape(label)}</span>',
+                unsafe_allow_html=True,
             )
-            case = case_options[selected_cname]
-            st.session_state.generate_report_case_id = case['id']
-            st.session_state.generate_report_case = case
+        columns[2].caption(f"Subjects: {len(subjects)}")
+        columns[3].caption(f"Findings: {len(findings)}")
 
-        render_case_selector()
-        case = st.session_state.get('generate_report_case')
-        if not case:
+
+def _latest_draft(versions: list[dict]) -> dict | None:
+    drafts = [
+        version for version in versions
+        if version.get("status") == "draft" and version.get("reservation_status") == "finalized"
+    ]
+    return max(drafts, key=lambda version: version["version_number"]) if drafts else None
+
+
+def _latest_final(versions: list[dict]) -> dict | None:
+    finals = [
+        version for version in versions
+        if version.get("status") == "final"
+        and version.get("reservation_status") == "finalized"
+        and version.get("review_status") == "approved"
+    ]
+    return max(finals, key=lambda version: version["version_number"]) if finals else None
+
+
+def _status_label(version: dict) -> str:
+    if version.get("status") == "final":
+        return "Final"
+    review_status = version.get("review_status")
+    if review_status == "submitted":
+        return "Submitted"
+    if review_status == "rejected":
+        return "Returned"
+    return "Draft"
+
+
+def _render_feedback(case: dict, version: dict, user: dict) -> None:
+    messages = db.get_report_review_messages(version["id"])
+    open_key = f"report_feedback_open_{version['id']}"
+    if st.session_state.pop("open_report_feedback_case_id", None) == case["id"]:
+        st.session_state[open_key] = True
+    if messages and st.button("Feedback", key=f"report_feedback_toggle_{version['id']}"):
+        st.session_state[open_key] = not st.session_state.get(open_key, False)
+    if not st.session_state.get(open_key, False):
+        return
+
+    for message in messages:
+        st.caption(f"{message['sender_name']} · {message['created_at']}")
+        st.write(message["message"])
+
+    if version.get("review_status") != "submitted":
+        return
+    if version.get("response_required_by_user_id") != user["id"]:
+        return
+    with st.form(f"report_feedback_response_{version['id']}"):
+        response = st.text_area("Response", key=f"report_feedback_text_{version['id']}")
+        send_response = st.form_submit_button("Send response")
+    if send_response:
+        try:
+            db.add_report_review_message(version["id"], sender_user_id=user["id"], message=response)
+        except (PermissionError, ValueError) as exc:
+            st.error(f"Unable to send response: {exc}")
+        else:
+            st.rerun()
+    if messages and st.button("Accept feedback", key=f"accept_report_feedback_{version['id']}"):
+        try:
+            db.accept_report_feedback(version["id"], investigator_user_id=user["id"])
+            db.transition_case_lifecycle(case["id"], "rejected", actor_user_id=user["id"])
+        except (PermissionError, ValueError) as exc:
+            st.error(f"Unable to accept feedback: {exc}")
+        else:
+            st.rerun()
+
+
+def _render_current_document(
+    case: dict,
+    version: dict | None,
+    user: dict,
+    *,
+    read_only: bool = False,
+) -> None:
+    if not version:
+        return
+    with st.container(border=True):
+        left, right = st.columns((6, 1), vertical_alignment="center")
+        document_label = "Final Report" if version.get("status") == "final" else "Draft"
+        left.markdown(f"**{document_label} v{version['version_number']}**")
+        verified = render_report_document_actions(version, key_prefix=f"investigator_report_{version['id']}")
+        if verified:
+            right.markdown(f"**{_status_label(version)} · Verified**")
+        if not read_only:
+            _render_feedback(case, version, user)
+
+
+def _generate_draft(case: dict, findings: list[dict], user: dict) -> None:
+    client = next((item for item in db.get_clients() if item["id"] == case["client_id"]), None)
+    reservation = None
+    output_path = None
+    wrote_artifact = False
+    try:
+        reservation = db.reserve_report_version(case["id"], status="draft", actor_user_id=user["id"])
+        output_path = build_versioned_output_path(
+            "reports", case.get("case_ref") or f"case-{case['id']}",
+            reservation["version_number"], status="draft",
+        )
+        output_path.parent.mkdir(exist_ok=True)
+        generate_report(
+            case, client, db.get_settings(), findings,
+            include_risk_graphs=True, status="draft", version=reservation["version_number"],
+            output_directory=output_path.parent,
+        )
+        wrote_artifact = True
+        digest = sha256_file(output_path)
+        verify_file_sha256(output_path, digest)
+        db.finalize_report_version_reservation(
+            reservation["reservation_id"], actor_user_id=user["id"],
+            content_hash=digest, storage_reference=str(output_path),
+            case_start_date=case.get("start_date"),
+        )
+    except Exception as exc:
+        if reservation:
+            if wrote_artifact and output_path:
+                output_path.unlink(missing_ok=True)
+            try:
+                db.abandon_report_version_reservation(reservation["reservation_id"], actor_user_id=user["id"])
+            except (PermissionError, ValueError):
+                pass
+        st.error(f"Draft generation failed: {exc}")
+        return
+    st.success(f"Draft v{reservation['version_number']} generated.")
+    st.rerun()
+
+
+def show_generate_report() -> None:
+    require_page_auth()
+    user = get_current_user()
+    if not user:
+        return
+    if user_has_role(user, "manager", "administrator"):
+        st.title("Generate Report Draft")
+        st.info("Managers review and sign off submitted reports; investigators generate and submit drafts.")
+        return
+
+    active_case_id = st.session_state.get("active_case_id")
+    case = next(
+        (
+            item for item in db.get_cases_with_workflow()
+            if item["id"] == active_case_id and _assigned(item, user)
+        ),
+        None,
+    )
+    if not case:
+        st.title("Generate Report Draft")
+        st.info("Select an active assigned case from Manage Cases before generating a report.")
+        return
+
+    lifecycle_status = case.get("lifecycle_status")
+    st.title("View Report" if lifecycle_status == "completed" else "Generate Report Draft")
+    st.caption(f"[{case.get('case_ref', 'NO-REF')}] {case['case_name']}")
+    versions = db.get_report_versions(case["id"])
+    if lifecycle_status == "completed":
+        final_report = _latest_final(versions)
+        if not final_report:
+            st.error("No finalized report is recorded for this completed case.")
             return
+        _render_current_document(case, final_report, user, read_only=True)
+        return
 
-        findings = db.get_case_findings(case['id'])
-        output_dir = "reports"
-        os.makedirs(output_dir, exist_ok=True)
-        out_filename = f"{output_dir}/case_report_{case['id']}.pdf"
-        out_attestation = f"{output_dir}/attestation_{case['id']}.pdf"
+    subjects = db.get_case_subjects(case["id"])
+    findings = db.get_case_findings(case["id"])
+    current_draft = _latest_draft(versions)
+    _render_readiness(case, subjects, findings)
+    _render_current_document(case, current_draft, user)
 
-        def render_case_context():
-           st.info(f"**Case Reference:** `{case.get('case_ref', 'N/A')}` | **Total Findings:** `{len(findings)}`")
+    if lifecycle_status in {"in_progress", "rejected"}:
+        label = "Generate Revised Draft" if current_draft else "Generate Draft"
+        if st.button(label, type="primary"):
+            if not findings:
+                st.error("A draft cannot be generated until the case has at least one finding.")
+                return
+            _generate_draft(case, findings, user)
 
-        def render_attestation_customization():
-           db_investigators = db.get_investigators()
-           inv_name = case.get('investigator_name', '')
-
-           if case.get('attestation_bio') is not None:
-               default_bio = case.get('attestation_bio')
-           else:
-               default_bio = ""
-               if inv_name:
-                   db_inv = next((i for i in db_investigators if i['name'] == inv_name), None)
-                   if db_inv:
-                       default_bio = db_inv.get('bio', '')
-
-           if 'generate_report_attestation_bio' not in st.session_state:
-               st.session_state.generate_report_attestation_bio = default_bio
-
-           with st.expander("Attestation / Lead Investigator Customization"):
-               with st.form(f"attestation_customization_form_{case['id']}"):
-                   attestation_bio = st.text_area(
-                       "Lead Investigator Bio for Attestation Letter",
-                       value=st.session_state.generate_report_attestation_bio,
-                       height=150,
-                   )
-                   if st.form_submit_button("Save Customization"):
-                       st.session_state.generate_report_attestation_bio = attestation_bio
-                       db.update_case_attestation_bio(case['id'], attestation_bio)
-                       st.success("Customization saved!")
-                       st.rerun()
-
-        def render_generate_actions():
-           col_rep, col_att = st.columns(2)
-
-           settings = db.get_settings()
-           default_graphs = str(settings.get('default_report_include_risk_graphs', 'true')).lower() in {'1', 'true', 'yes', 'y'}
-           if 'generate_report_include_risk_graphs' not in st.session_state:
-               st.session_state.generate_report_include_risk_graphs = default_graphs
-
-           with st.expander("Report Configuration"):
-               st.checkbox(
-                   "Include risk graph summary in report",
-                   value=st.session_state.generate_report_include_risk_graphs,
-                   key="generate_report_include_risk_graphs",
-               )
-
-           with col_rep:
-               if st.button("Generate OSINT PDF Report", use_container_width=True, type="primary"):
-                   if not findings:
-                       st.error("No intelligence findings recorded. Please add findings before generating the report.")
-                   else:
-                       with st.spinner("Compiling Intelligence Report PDF..."):
-                           clients = db.get_clients()
-                           client = next((c for c in clients if c['id'] == case['client_id']), None)
-                           firm = db.get_settings()
-                           try:
-                               generate_report(
-                                   case,
-                                   client,
-                                   firm,
-                                   findings,
-                                   out_filename,
-                                   include_risk_graphs=st.session_state.generate_report_include_risk_graphs,
-                               )
-                               st.success("Intelligence Report generated successfully!")
-
-                               missing = []
-                               if not case.get('investigator_name'): missing.append("Lead Investigator")
-                               if not case.get('target_scope'): missing.append("Target Specification")
-                               if not case.get('legitimate_interest'): missing.append("UK GDPR / Legitimate Interest Statement")
-                               if not case.get('executive_summary'): missing.append("Executive Summary")
-                               if not case.get('key_findings_summary'): missing.append("Key Findings Summary")
-                               if not case.get('tools_used') or case.get('tools_used') == '[]' or case.get('tools_used') == '[{"Name": "", "Description": ""}]':
-                                   missing.append("Tools / Platforms Utilised")
-
-                               if missing:
-                                   st.warning(f"Note: The following case fields are blank and may appear unpopulated in the report: {', '.join(missing)}")
-
-                           except Exception as e:
-                               st.error(f"Failed to generate report: {e}")
-
-           with col_att:
-               if st.button("Generate Attestation Letter", use_container_width=True):
-                   with st.spinner("Generating Attestation Letter PDF..."):
-                       clients = db.get_clients()
-                       client = next((c for c in clients if c['id'] == case['client_id']), None)
-                       firm = db.get_settings()
-                       try:
-                           generate_attestation(
-                               case,
-                               client,
-                               firm,
-                               out_attestation,
-                               custom_bio=st.session_state.get('generate_report_attestation_bio', ''),
-                           )
-                           st.success("Attestation Letter generated successfully!")
-
-                           missing = []
-                           if not case.get('investigator_name'): missing.append("Lead Investigator")
-                           if not case.get('start_date'): missing.append("Start Date")
-                           if not case.get('end_date'): missing.append("End Date")
-                           if not case.get('target_scope'): missing.append("Target Specification Scope")
-                           if not st.session_state.get('generate_report_attestation_bio'): missing.append("Investigator Bio")
-
-                           if missing:
-                               st.warning(f"Note: The following fields are blank and may appear unpopulated in the letter: {', '.join(missing)}")
-
-                       except Exception as e:
-                           st.error(f"Failed to generate attestation: {e}")
-
-        def render_download_sections():
-           if os.path.exists(out_filename):
-               st.divider()
-               st.subheader("Intelligence Report Deliverable")
-               with open(out_filename, "rb") as pdf_file:
-                   pdf_data = pdf_file.read()
-                   case_slug = case['case_name'].replace(' ', '_')
-                   st.download_button(
-                       label="Download OSINT PDF Report",
-                       data=pdf_data,
-                       file_name=f"OSINT_Report_{case.get('case_ref', 'REF')}_{case_slug}.pdf",
-                       mime="application/pdf"
-                   )
-               with st.expander("Preview Intelligence Report"):
-                   base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-                   pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></iframe>'
-                   st.markdown(pdf_display, unsafe_allow_html=True)
-
-           if os.path.exists(out_attestation):
-               st.divider()
-               st.subheader("Attestation Letter Deliverable")
-               with open(out_attestation, "rb") as pdf_file:
-                   pdf_data = pdf_file.read()
-                   case_slug = case['case_name'].replace(' ', '_')
-                   st.download_button(
-                       label="Download Attestation Letter",
-                       data=pdf_data,
-                       file_name=f"Attestation_{case.get('case_ref', 'REF')}_{case_slug}.pdf",
-                       mime="application/pdf"
-                   )
-               with st.expander("Preview Attestation Letter"):
-                   base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-                   pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></iframe>'
-                   st.markdown(pdf_display, unsafe_allow_html=True)
-
-        render_case_context()
-        render_attestation_customization()
-        render_generate_actions()
-        render_download_sections()
-
-    render_generate_report_page()
+        with st.form(f"submit_draft_{case['id']}"):
+            submit_password = st.text_input("Current password to submit", type="password")
+            submit_requested = st.form_submit_button("Submit")
+        if submit_requested:
+            if not verify_current_password(user, submit_password):
+                st.error("Current password verification failed.")
+                return
+            if not current_draft or current_draft.get("review_status") not in {"draft", "rejected"}:
+                st.error("Generate a recorded draft before submitting this case.")
+                return
+            try:
+                db.submit_report_version(current_draft["id"], actor_user_id=user["id"])
+                db.transition_case_lifecycle(case["id"], "submitted", actor_user_id=user["id"])
+            except ValueError as exc:
+                st.error(f"Unable to submit this case: {exc}")
+            else:
+                st.success("Draft submitted.")
+                st.rerun()

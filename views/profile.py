@@ -2,18 +2,45 @@ import streamlit as st
 import pyotp
 import qrcode
 import io
-from database.db import get_user, update_user_mfa, update_user_password
+from database import operations as db
+from database.db import _update_user, get_user, update_user_mfa, update_user_password
 from argon2.exceptions import VerifyMismatchError
-from utils.auth import ph
+from utils.auth import ph, require_page_auth
 
 def show_profile():
     @st.fragment
     def render_profile_page():
-        st.title("Security Profile")
-        st.write(f"Logged in as: **{st.session_state.username}**")
+        require_page_auth()
 
         user = get_user(st.session_state.username)
+        role = user["role"]
+        st.title("Profile")
+        st.write(f"Logged in as: **{user['username']}** ({role.title()})")
 
+        if role in {"manager", "investigator"}:
+            with st.form("professional_profile_form"):
+                st.subheader("Professional Profile")
+                display_name = st.text_input("Name", value=user.get("display_name") or "")
+                title = st.text_input("Title", value=user.get("title") or "")
+                profile = db.get_investigator_profile(user["id"]) if role == "investigator" else None
+                if role == "investigator":
+                    credentials = st.text_input("Credentials / Certifications", value=(profile or {}).get("credentials") or "")
+                    biography = st.text_area("Professional Biography", value=(profile or {}).get("professional_bio") or "")
+                if st.form_submit_button("Save Profile"):
+                    _update_user(user["username"], "display_name = ?, title = ?", (display_name.strip(), title.strip()))
+                    if role == "investigator":
+                        required_fields = (display_name, title, credentials, biography)
+                        db.upsert_investigator_profile(
+                            user["id"],
+                            completion_status="complete" if all(field.strip() for field in required_fields) else "incomplete",
+                            credentials=credentials.strip(),
+                            professional_bio=biography.strip(),
+                        )
+                    st.success("Profile updated.")
+                    st.rerun()
+            st.divider()
+
+        st.subheader("Account Security")
         st.subheader("Multi-Factor Authentication (TOTP)")
         if user['mfa_enabled']:
             st.success("MFA is currently ENABLED on your account.")

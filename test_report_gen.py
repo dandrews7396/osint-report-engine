@@ -13,6 +13,7 @@ from database import findings as finding_schema
 mock_db = MagicMock()
 mock_db.get_investigators.return_value = [
     {
+        'user_id': 42,
         'name': 'Alex Mercer',
         'title': 'Principal OSINT Investigator',
         'bio': 'Senior Intelligence Analyst specializing in dark web intelligence, cloud footprint mapping, and OSINT risk analysis.'
@@ -32,8 +33,7 @@ case_data = {
     'report_date': '2026-08-12',
     'start_date': '2026-08-01',
     'end_date': '2026-08-10',
-    'investigator_name': 'Alex Mercer',
-    'investigator_description': 'Senior Intelligence Analyst specializing in dark web intelligence, cloud footprint mapping, and OSINT risk analysis.',
+    'lead_investigator_id': 42,
     'executive_summary': 'During the assessment period, an extensive open-source intelligence analysis was conducted against target infrastructure and digital footprints. Primary threats identified include unauthenticated cloud storage exposing sensitive financial backups, executive credential leaks across breach data aggregators, and social engineering vectors.',
     'key_findings_summary': 'Identified 1 Critical cloud storage leak, 1 High risk corporate credential compromise, and 1 Medium risk executive digital exposure vector.',
     'target_scope': 'apex-corp-global.com (*.apex-corp-global.com) and associated primary digital assets.',

@@ -9,6 +9,11 @@ from database.subjects import (
     normalize_subject_data,
     subject_display_name,
 )
+from views.case_evidence import (
+    case_evidence_access,
+    current_user_is_manager,
+    render_manager_evidence_browser,
+)
 
 try:
     fragment = st.fragment
@@ -118,6 +123,10 @@ def show_manage_subjects():
         st.title("Case Subjects")
         st.write("Assign multiple subjects to each case, capture the relevant type-specific details, and link findings back to the right subject.")
 
+        if current_user_is_manager():
+            render_manager_evidence_browser()
+            return
+
         cases = db.get_cases()
         active_client_id = st.session_state.get('active_client_id')
         if active_client_id:
@@ -133,6 +142,13 @@ def show_manage_subjects():
             st.info("Select an active case from its expander on Manage Cases before adding subjects.")
             return
 
+        evidence_access = case_evidence_access(active_case)
+        if evidence_access.can_mutate:
+            st.success(evidence_access.message)
+        else:
+            st.warning(evidence_access.message)
+            return
+
         subjects = db.get_case_subjects(case_id)
         edit_subject_id = st.session_state.get('edit_subject_id')
         st.caption(
@@ -145,7 +161,10 @@ def show_manage_subjects():
         if not subjects:
             st.info("No subjects added to this case yet.")
         else:
-            for subject in subjects:
+            for subject in sorted(
+                subjects,
+                key=lambda subject: subject["id"] == edit_subject_id,
+            ):
                 is_editing = edit_subject_id == subject['id']
                 subject_label = _subject_label(subject)
                 if is_editing:
@@ -156,7 +175,9 @@ def show_manage_subjects():
                     item_container = st.expander(subject_label)
 
                 with item_container:
-                    st.caption(f"Linked findings: {subject.get('finding_count', 0)}")
+                    linked_subjects, linked_findings = st.columns(2)
+                    linked_subjects.caption(f"Linked subjects: {subject.get('linked_subject_count', 0)}")
+                    linked_findings.caption(f"Linked findings: {subject.get('finding_count', 0)}")
 
                     if is_editing:
                         display_key = _subject_editor_key(subject['id'], "display_name", "edit_subject")

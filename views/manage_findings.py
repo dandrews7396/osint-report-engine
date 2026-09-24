@@ -9,6 +9,11 @@ from database.findings import (
 )
 from streamlit_jodit import st_jodit
 from utils.helpers import process_base64_images, restore_base64_images, sanitize_rich_html
+from views.case_evidence import (
+    case_evidence_access,
+    current_user_is_manager,
+    render_manager_evidence_browser,
+)
 
 try:
     fragment = st.fragment
@@ -110,6 +115,10 @@ def show_manage_findings():
         st.title("Case Findings & Intelligence")
         st.write("Populate your cases with verified OSINT findings, including category-specific intelligence data and report-ready captures.")
 
+        if current_user_is_manager():
+            render_manager_evidence_browser()
+            return
+
         cases = db.get_cases()
         active_client_id = st.session_state.get("active_client_id")
         if active_client_id:
@@ -122,6 +131,13 @@ def show_manage_findings():
         active_case = next((case for case in cases if case["id"] == case_id), None)
         if active_case is None:
             st.info("Select an active case from its expander on Manage Cases before adding findings.")
+            return
+
+        evidence_access = case_evidence_access(active_case)
+        if evidence_access.can_mutate:
+            st.success(evidence_access.message)
+        else:
+            st.warning(evidence_access.message)
             return
 
         subjects = db.get_case_subjects(case_id)
@@ -143,7 +159,10 @@ def show_manage_findings():
         if not findings:
             st.info("No intelligence findings added to this case yet.")
 
-        for finding in findings:
+        for finding in sorted(
+            findings,
+            key=lambda finding: finding["id"] == edit_finding_id,
+        ):
             is_editing = edit_finding_id == finding["id"]
             finding_label = (
                 f"[{finding.get('risk_level', 'Unspecified')}] "

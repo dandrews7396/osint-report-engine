@@ -1,10 +1,11 @@
 import streamlit as st
-import time
 import pyotp
 import random
 import string
 from captcha.image import ImageCaptcha
+from database import operations as db
 from database.db import get_user, record_failed_login, reset_failed_logins, get_failed_logins, normalize_username
+from argon2.exceptions import VerifyMismatchError, VerificationError
 from utils.auth import ph, get_cookie_controller, sign_token, hydrate_authenticated_session
 
 _HIDE_SIDEBAR_STYLE = """
@@ -23,6 +24,17 @@ footer { visibility: hidden; }
 # time (fast reject vs. slow hash) reveals which usernames exist.
 _DUMMY_HASH = ph.hash("kairos_constant_time_placeholder")
 
+
+def _record_login_event(user: dict | None, event_type: str, username: str) -> None:
+    db.log_audit_event(
+        user["id"] if user else None,
+        event_type,
+        "authentication",
+        username,
+        {"username": username},
+    )
+
+
 def show_login():
     st.markdown(_HIDE_SIDEBAR_STYLE, unsafe_allow_html=True)
     st.title("Osint Login")
@@ -33,20 +45,24 @@ def show_login():
             token = st.text_input("6-digit TOTP Token")
             if st.form_submit_button("Verify"):
                 user = get_user(st.session_state.mfa_user)
-                if not user:
+                if not user or not user["active"]:
+                    _record_login_event(None, "login.failure", st.session_state.mfa_user)
+                    del st.session_state.mfa_user
                     st.error("Invalid token.")
                     st.rerun()
-                    
+
                 totp = pyotp.TOTP(user['mfa_secret'])
                 token_clean = token.replace(" ", "")
                 if totp.verify(token_clean, valid_window=1):
                     reset_failed_logins(user['username'])
+                    _record_login_event(user, "login.success", user["username"])
                     hydrate_authenticated_session(user['username'])
                     get_cookie_controller().set('kairos_auth_token', sign_token(user['username']), max_age=6*3600)
                     del st.session_state.mfa_user
                     st.rerun()
                 else:
                     record_failed_login(user['username'])
+                    _record_login_event(user, "login.failure", user["username"])
                     st.error("Invalid token.")
                     st.rerun()
         return
@@ -93,9 +109,10 @@ def show_login():
             if not user:
                 try:
                     ph.verify(_DUMMY_HASH, password)
-                except Exception:
+                except (VerifyMismatchError, VerificationError):
                     pass
                 record_failed_login(normalized_username)
+                _record_login_event(None, "login.failure", normalized_username)
                 if 'captcha_text' in st.session_state:
                     del st.session_state['captcha_text']
                 st.error("Invalid username or password.")
@@ -103,7 +120,11 @@ def show_login():
             else:
                 try:
                     ph.verify(user['password_hash'], password)
-                    if user['mfa_enabled']:
+                    if not user["active"]:
+                        record_failed_login(normalized_username)
+                        _record_login_event(user, "login.failure", normalized_username)
+                        st.error("Invalid username or password.")
+                    elif user['mfa_enabled']:
                         st.session_state.mfa_user = normalized_username
                         st.rerun()
                     else:
@@ -113,10 +134,12 @@ def show_login():
                         if 'captcha_text' in st.session_state:
                             del st.session_state['captcha_text']
                         hydrate_authenticated_session(normalized_username)
+                        _record_login_event(user, "login.success", normalized_username)
                         get_cookie_controller().set('kairos_auth_token', sign_token(normalized_username), max_age=6*3600)
                         st.rerun()
-                except Exception:
+                except (VerifyMismatchError, VerificationError):
                     record_failed_login(normalized_username)
+                    _record_login_event(user, "login.failure", normalized_username)
                     if 'captcha_text' in st.session_state:
                         del st.session_state['captcha_text']
                     st.error("Invalid username or password.")

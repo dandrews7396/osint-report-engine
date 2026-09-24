@@ -25,6 +25,11 @@ RICH_TEXT_URL_SCHEMES = {'data', 'http', 'https', 'mailto'}
 RICH_TEXT_DROP_CONTENT = {'embed', 'iframe', 'math', 'object', 'script', 'style', 'svg', 'template'}
 
 
+def format_lifecycle_status(status: str | None) -> str:
+    """Convert a stored workflow status into its user-facing label."""
+    return (status or "Unknown").replace("_", " ").title()
+
+
 def sanitize_rich_html(html_content):
     """Return the supported rich-text subset with executable markup removed."""
     if not html_content:

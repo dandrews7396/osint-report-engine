@@ -13,6 +13,12 @@ from jinja2.sandbox import SandboxedEnvironment
 from weasyprint import HTML
 from database import operations as db
 from database.findings import finding_summary_lines
+from reporting.versioning import (
+    approval_end_date,
+    approval_signoff,
+    build_versioned_output_path,
+    sha256_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +37,62 @@ def format_date_with_suffix(date_str):
         return date_str
 
 
-def generate_report(case, client, firm, findings, output_path, include_risk_graphs: bool = True):
+def generate_report(
+    case,
+    client,
+    firm,
+    findings,
+    output_path=None,
+    include_risk_graphs: bool = True,
+    *,
+    status="draft",
+    approval_data=None,
+    case_start_date=None,
+    version=None,
+    output_directory=None,
+):
     """
     Generates an OSINT Intelligence PDF report using Jinja2 + WeasyPrint.
     Dynamically renders case findings, risk distributions, and intelligence evidence.
+
+    Legacy callers can continue to pass ``output_path`` positionally. New workflow
+    callers pass ``output_directory`` and ``version`` to obtain a deterministic,
+    non-overwriting path, and use ``status="final"`` with explicit
+    ``approval_data`` for final signoff rendering.
     """
+    if status not in {"draft", "final"}:
+        raise ValueError("status must be either 'draft' or 'final'")
+    if status == "final":
+        if approval_data is None:
+            raise ValueError("approval_data is required for a final report")
+        signoff = approval_signoff(approval_data)
+    else:
+        signoff = None
+
+    generated_output_path = output_path is None
+    if generated_output_path:
+        if output_directory is None or version is None:
+            raise ValueError(
+                "output_path, or both output_directory and version, must be provided"
+            )
+        output_path = build_versioned_output_path(
+            output_directory, case.get("case_ref", ""), version, status=status
+        )
+    output_path = os.fspath(output_path)
+    if generated_output_path and os.path.exists(output_path):
+        raise FileExistsError(f"versioned report already exists: {output_path}")
+
+    # Work on a rendering copy so approval metadata cannot alter persisted case input.
+    case = dict(case)
+    findings = [dict(finding) for finding in findings]
+    case["start_date"] = (
+        case_start_date if case_start_date is not None else case.get("start_date", "")
+    )
+    if status == "final":
+        case["end_date"] = approval_end_date(approval_data)
+    case["report_status"] = status
+    case["approval"] = signoff
+
     try:
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         
@@ -184,7 +241,9 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
                 yval = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2.0, yval + (y_max * 0.02), int(yval), ha='center', va='bottom', fontweight='bold', fontsize=12)
                 
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            chart_directory = os.path.dirname(output_path)
+            if chart_directory:
+                os.makedirs(chart_directory, exist_ok=True)
             chart_filename = f"chart_{uuid.uuid4().hex}.png"
             chart_path = os.path.join(os.path.dirname(output_path), chart_filename)
             
@@ -244,20 +303,29 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
         firm_dict['target_scope'] = case.get('target_scope', firm_dict.get('target_scope', ''))
         firm_dict['tools_used'] = case.get('tools_used', firm_dict.get('tools_used', ''))
         
+        directory_investigator = next(
+            (
+                investigator
+                for investigator in db.get_investigators()
+                if investigator["user_id"] == case.get("lead_investigator_id")
+            ),
+            None,
+        )
         investigator = {
-            'name': case.get('investigator_name', ''),
-            'description': case.get('investigator_description', ''),
-            'title': ''
+            "name": directory_investigator.get("name", "") if directory_investigator else "",
+            "description": directory_investigator.get("bio", "") if directory_investigator else "",
+            "title": directory_investigator.get("title", "") if directory_investigator else "",
         }
-        
-        for inv in db.get_investigators():
-            if inv['name'] == investigator['name']:
-                investigator['description'] = inv.get('bio', '')
-                investigator['title'] = inv.get('title', '')
-                break
 
+        persona_references = (
+            db.get_case_persona_references(case_id) if case_id is not None else []
+        )
+        allocated_personas = ", ".join(
+            item["persona_reference"] for item in persona_references
+        )
         case['covert_persona_reference'] = (
-            case.get('covert_persona_reference')
+            allocated_personas
+            or case.get('covert_persona_reference')
             or case.get('prepared_by')
             or case.get('report_prepared_by')
             or investigator.get('name')
@@ -288,20 +356,30 @@ def generate_report(case, client, firm, findings, output_path, include_risk_grap
             investigator=investigator,
             findings=findings,
             subjects=subjects,
-            findings_table=table_html
+            findings_table=table_html,
+            report={"status": status, "is_final": status == "final", "approval": signoff},
         )
         
         report_html_body = markdown.markdown(rendered_md, extensions=['fenced_code', 'tables', 'md_in_html', 'toc', 'attr_list'])
         
         html_env = Environment(loader=FileSystemLoader(template_dir))
         html_template = html_env.get_template('report_template.html')
-        final_html = html_template.render(body=report_html_body, firm=firm_dict, case=case, client=client)
+        final_html = html_template.render(
+            body=report_html_body,
+            firm=firm_dict,
+            case=case,
+            client=client,
+            report={"status": status, "is_final": status == "final", "approval": signoff},
+        )
 
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        output_directory_name = os.path.dirname(output_path)
+        if output_directory_name:
+            os.makedirs(output_directory_name, exist_ok=True)
         project_root = os.path.dirname(os.path.dirname(__file__))
         HTML(string=final_html, base_url=project_root).write_pdf(output_path)
         
-        logger.info(f"Successfully generated OSINT PDF report at {output_path}")
+        digest = sha256_file(output_path)
+        logger.info("Successfully generated OSINT PDF report at %s (SHA-256: %s)", output_path, digest)
         return True
     except Exception as e:
         logger.error(f"Failed to generate report: {e}")
@@ -327,17 +405,25 @@ def generate_attestation(case, client, firm, output_path, custom_bio=None):
         firm_dict['name'] = firm_name
         firm_dict['firm_name'] = firm_name
 
+        directory_investigator = next(
+            (
+                investigator
+                for investigator in db.get_investigators()
+                if investigator["user_id"] == case.get("lead_investigator_id")
+            ),
+            None,
+        )
         investigator = {
-            'name': case.get('investigator_name', ''),
-            'description': case.get('investigator_description', ''),
-            'title': ''
+            "name": directory_investigator.get("name", "") if directory_investigator else "",
+            "description": (
+                custom_bio
+                if custom_bio is not None
+                else directory_investigator.get("bio", "")
+                if directory_investigator
+                else ""
+            ),
+            "title": directory_investigator.get("title", "") if directory_investigator else "",
         }
-        if investigator['name']:
-            db_investigators = db.get_investigators()
-            db_inv = next((i for i in db_investigators if i['name'] == investigator['name']), None)
-            if db_inv:
-                investigator['description'] = custom_bio if custom_bio is not None else db_inv.get('bio', '')
-                investigator['title'] = db_inv.get('title', '')
 
         case['covert_persona_reference'] = (
             case.get('covert_persona_reference')
