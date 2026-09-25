@@ -9,6 +9,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 
 LIFECYCLE_COLORS = {
@@ -54,12 +55,16 @@ def grouped_columns(
     labels = [row["label"] for row in rows]
     positions = list(range(len(rows)))
     width = 0.8 / max(len(fields), 1)
+    maximum_value = 0
     for index, (field, label, color) in enumerate(fields):
         offset = (index - (len(fields) - 1) / 2) * width
         values = [row.get(field, 0) for row in rows]
+        maximum_value = max(maximum_value, *values)
         bars = axis.bar([position + offset for position in positions], values, width, label=label, color=color)
         axis.bar_label(bars, padding=2, fontsize=8, color=CHART_TEXT)
     axis.set_ylabel(ylabel)
+    axis.set_ylim(0, maximum_value + 2)
+    axis.yaxis.set_major_locator(MaxNLocator(integer=True))
     axis.set_xticks(positions, labels, rotation=30, ha="right")
     axis.legend(ncol=min(len(fields), 4), frameon=False, fontsize=8, labelcolor=CHART_TEXT)
     return _finish(figure)

@@ -100,30 +100,32 @@ def _render_rolling_activity(user: dict) -> None:
     )
     rows = "".join(
         "<tr>"
-        f"<td>{month.strftime('%b %Y')}</td>"
-        f"<td>{activity.get(month.strftime('%Y-%m'), {}).get('in_progress', 0)}</td>"
-        f"<td>{activity.get(month.strftime('%Y-%m'), {}).get('submitted', 0)}</td>"
-        f"<td>{activity.get(month.strftime('%Y-%m'), {}).get('rejected', 0)}</td>"
-        f"<td>{activity.get(month.strftime('%Y-%m'), {}).get('completed', 0)}</td>"
+        f"<td style=\"text-align: center;\">{month.strftime('%b %Y')}</td>"
+        f"<td style=\"text-align: center;\">{activity.get(month.strftime('%Y-%m'), {}).get('in_progress', 0)}</td>"
+        f"<td style=\"text-align: center;\">{activity.get(month.strftime('%Y-%m'), {}).get('submitted', 0)}</td>"
+        f"<td style=\"text-align: center;\">{activity.get(month.strftime('%Y-%m'), {}).get('rejected', 0)}</td>"
+        f"<td style=\"text-align: center;\">{activity.get(month.strftime('%Y-%m'), {}).get('completed', 0)}</td>"
         "</tr>"
         for month in month_starts
     )
     st.markdown(
         """
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr>
-              <th style="text-align: left; padding: 0.4rem;">Month</th>
-              <th style="text-align: right; padding: 0.4rem;">Started</th>
-              <th style="text-align: right; padding: 0.4rem;">Submitted</th>
-              <th style="text-align: right; padding: 0.4rem;">Returned</th>
-              <th style="text-align: right; padding: 0.4rem;">Completed</th>
-            </tr>
-          </thead>
-          <tbody>
+        <div style="margin-bottom: 1rem;">
+          <div style="border: 1px solid #334155; border-radius: 0.5rem; overflow: hidden;">
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 0;">
+              <thead>
+                <tr>
+                  <th style="text-align: center; padding: 0.4rem;">Month</th>
+                  <th style="text-align: center; padding: 0.4rem;">Started</th>
+                  <th style="text-align: center; padding: 0.4rem;">Submitted</th>
+                  <th style="text-align: center; padding: 0.4rem;">Returned</th>
+                  <th style="text-align: center; padding: 0.4rem;">Completed</th>
+                </tr>
+              </thead>
+              <tbody>
         """
         + rows
-        + "</tbody></table>",
+        + "</tbody></table></div></div>",
         unsafe_allow_html=True,
     )
 

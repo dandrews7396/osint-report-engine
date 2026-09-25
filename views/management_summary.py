@@ -47,6 +47,7 @@ PRESETS = {
     "Year": "year",
     "Custom": "custom",
 }
+REPORT_CHART_CACHE_VERSION = 4
 
 
 def _table(rows: list[dict[str, object]]) -> None:
@@ -157,6 +158,7 @@ def _initialise_state() -> None:
         ("management_report_section_reset", 0),
         ("management_report_applied_configuration", defaults),
         ("management_report_chart_images", None),
+        ("management_report_chart_cache_version", None),
         ("management_report_configuration_expanded", True),
     ):
         st.session_state.setdefault(key, value)
@@ -385,6 +387,7 @@ def _render_configuration_bar(user: dict, configurations: list[dict], investigat
     if st.button("Run Report", use_container_width=True):
         st.session_state.management_report_applied_configuration = current
         st.session_state.management_report_chart_images = None
+        st.session_state.management_report_chart_cache_version = None
         st.session_state.management_report_configuration_expanded = False
         st.rerun()
 
@@ -457,9 +460,22 @@ def _render_report(
         st.info(report["coverage_notice"])
     active_section = _render_report_actions()
     if active_section == "throughput":
-        with _panel("Lifecycle Throughput", "Cases crossing each lifecycle gate in the selected period."):
+        with _panel(
+            "Lifecycle Throughput",
+            "Independent lifecycle movements recorded during the selected period; this is not a conversion funnel.",
+        ):
+            lifecycle_metrics = st.columns(4)
+            for column, (label, field) in zip(
+                lifecycle_metrics,
+                (
+                    ("Started", "started"),
+                    ("Submitted", "submitted"),
+                    ("Returned", "returned"),
+                    ("Completed", "completed"),
+                ),
+            ):
+                column.metric(label, report["throughput"][field])
             st.image(chart_images["throughput"], use_container_width=True)
-            _table([{key.title(): value for key, value in report["throughput"].items()}])
     if active_section == "case_flow":
         with _panel("Case Flow", "Assignments and lifecycle movement across the selected period."):
             st.image(chart_images["case_flow"], use_container_width=True)
@@ -501,26 +517,26 @@ def _render_report(
             st.image(chart_images["personas"], use_container_width=True)
             _table([{"Persona": row["persona"], "Active investigations": row["active_investigations"]} for row in report["persona_usage"]])
     if active_section == "difficult_cases":
-        with _panel("Difficult Cases", "Top five cases by subject count, finding count, and investigation duration."):
-            rankings = (
-                ("Highest subject counts", "subjects"),
-                ("Highest finding counts", "findings"),
-                ("Longest investigation durations", "durations"),
-            )
-            ranked_rows = [
+        with _panel(
+            "Difficult Cases",
+            "Five cases most frequently identified as complexity or duration outliers. Ongoing durations are measured as of the report date.",
+        ):
+            _table(
+                [
                 {
-                    "Ranked by": title,
-                    "Rank": rank,
                     "Case": row["case_ref"],
                     "Investigator": row["investigator"],
-                    "Subjects": row["subjects"],
-                    "Findings": row["findings"],
-                    "Investigation duration (days)": row["investigation_duration"] or "—",
+                    "Investigation duration (days)": (
+                        f"{row['investigation_duration']:.0f}"
+                        + (" (ongoing)" if row["investigation_duration_status"] == "ongoing" else "")
+                        if row["investigation_duration"] is not None
+                        else "—"
+                    ),
+                    "Why included": "; ".join(row["reasons"]),
                 }
-                for title, key in rankings
-                for rank, row in enumerate(report["difficult_cases"][key], start=1)
-            ]
-            _table(ranked_rows)
+                for row in report["difficult_cases"]
+                ]
+            )
     attention_items = report["manager_attention"]
     attention_label = "Manager Attention"
     if attention_items:
@@ -594,10 +610,16 @@ def show_management_summary() -> None:
         st.error(str(exc))
         return
     chart_images = st.session_state.management_report_chart_images
+    if (
+        st.session_state.management_report_chart_cache_version
+        != REPORT_CHART_CACHE_VERSION
+    ):
+        chart_images = None
     if chart_images is None:
         with st.spinner("Preparing report charts..."):
             chart_images = _rendered_chart_images(report)
         st.session_state.management_report_chart_images = chart_images
+        st.session_state.management_report_chart_cache_version = REPORT_CHART_CACHE_VERSION
     investigator_name = next(
         (
             item.get("display_name") or item["username"]

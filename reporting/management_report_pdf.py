@@ -156,25 +156,29 @@ def render_management_report_pdf(
         )
     if "difficult_cases" in selected_sections:
         contents.append("Difficult Cases")
-        difficult_content = ""
-        for title, key in (
-            ("Highest subject counts", "subjects"),
-            ("Highest finding counts", "findings"),
-            ("Longest investigation durations", "durations"),
-        ):
-            difficult_content += f"<h3>{escape(title)}</h3>" + _table(
-                [
-                    {
-                        "Case": row["case_ref"],
-                        "Investigator": row["investigator"],
-                        "Subjects": row["subjects"],
-                        "Findings": row["findings"],
-                        "Investigation duration (days)": row["investigation_duration"] or "—",
-                    }
-                    for row in report["difficult_cases"][key]
-                ]
+        difficult_content = _table(
+            [
+                {
+                    "Case": row["case_ref"],
+                    "Investigator": row["investigator"],
+                    "Investigation duration (days)": (
+                        f"{row['investigation_duration']:.0f}"
+                        + (" (ongoing)" if row["investigation_duration_status"] == "ongoing" else "")
+                        if row["investigation_duration"] is not None
+                        else "—"
+                    ),
+                    "Why included": "; ".join(row["reasons"]),
+                }
+                for row in report["difficult_cases"]
+            ]
+        )
+        sections.append(
+            _section(
+                "Difficult Cases",
+                "Five cases most frequently identified as complexity or duration outliers.",
+                difficult_content,
             )
-        sections.append(_section("Difficult Cases", "Contextual complexity and duration outliers.", difficult_content))
+        )
 
     content_list = "".join(f"<li>{escape(item)}</li>" for item in contents)
     html = f"""<!doctype html>

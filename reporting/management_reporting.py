@@ -62,7 +62,7 @@ def _bucket_starts(start: date, end: date) -> tuple[list[date], str]:
     days = (end - start).days
     if days <= 14:
         return [start + timedelta(days=offset) for offset in range(days)], "day"
-    if days <= 92:
+    if days <= 45:
         first = start - timedelta(days=start.weekday())
         starts = []
         current = first
@@ -272,6 +272,7 @@ def build_management_report(
 
     durations: dict[str, list[float]] = defaultdict(list)
     case_duration_rows = []
+    report_as_of = min(today, end - timedelta(days=1))
     for case_id in selected_cases:
         case = cases[case_id]
         case_events = events_by_case[case_id]
@@ -285,8 +286,13 @@ def build_management_report(
         if started and submitted:
             investigation_duration = _duration_days(started[0]["at"], submitted[0]["at"])
             durations["Investigation Duration"].append(investigation_duration)
+            investigation_duration_status = "submitted"
+        elif started:
+            investigation_duration = float((report_as_of - started[0]["at"].date()).days)
+            investigation_duration_status = "ongoing"
         else:
             investigation_duration = None
+            investigation_duration_status = None
         if submitted and completed:
             durations["Submitted to Completed"].append(_duration_days(submitted[0]["at"], completed[-1]["at"]))
         if returned and completed:
@@ -302,6 +308,7 @@ def build_management_report(
                 "subjects": subject_counts[case_id],
                 "findings": finding_counts[case_id],
                 "investigation_duration": investigation_duration,
+                "investigation_duration_status": investigation_duration_status,
                 "returned_duration": returned_duration,
                 "investigator": case.get("current_investigator_name") or case.get("current_investigator_username") or "Unassigned",
             }
@@ -408,14 +415,38 @@ def build_management_report(
     ]
     persona_usage.sort(key=lambda item: (-item["active_investigations"], item["persona"]))
 
-    difficult_cases = {
-        "subjects": sorted(case_duration_rows, key=lambda row: (-row["subjects"], row["case_ref"]))[:5],
-        "findings": sorted(case_duration_rows, key=lambda row: (-row["findings"], row["case_ref"]))[:5],
-        "durations": sorted(
-            [row for row in case_duration_rows if row["investigation_duration"] is not None],
-            key=lambda row: (-row["investigation_duration"], row["case_ref"]),
-        )[:5],
-    }
+    difficult_case_candidates: dict[int, dict[str, Any]] = {}
+    rankings = (
+        ("subjects", "High subject count"),
+        ("findings", "High finding count"),
+        ("investigation_duration", "Long investigation"),
+    )
+    for field, reason in rankings:
+        eligible_rows = [
+            row for row in case_duration_rows
+            if row[field] is not None
+        ]
+        for rank, row in enumerate(
+            sorted(eligible_rows, key=lambda item: (-item[field], item["case_ref"]))[:5],
+            start=1,
+        ):
+            candidate = difficult_case_candidates.setdefault(
+                row["case_id"],
+                {**row, "reasons": [], "best_rank": rank},
+            )
+            candidate["reasons"].append(reason)
+            candidate["best_rank"] = min(candidate["best_rank"], rank)
+    difficult_cases = sorted(
+        difficult_case_candidates.values(),
+        key=lambda row: (
+            -len(row["reasons"]),
+            row["best_rank"],
+            -row["findings"],
+            -row["subjects"],
+            -row["investigation_duration"] if row["investigation_duration"] is not None else 0,
+            row["case_ref"],
+        ),
+    )[:5]
 
     def investigator_name(investigator_id: int) -> str:
         return (
