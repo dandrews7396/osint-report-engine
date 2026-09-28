@@ -6,12 +6,12 @@ You should only run this application locally or on a trusted, secure network. **
 This is open source and free. Do not contact me if you can't get it working, I don't have time to provide support for this. Review the code, and open a PR. I do not provide support. Use at your own risk, no warranty
 
 ## Osint Report Engine
-Osint Report Engine is a web application designed to streamline OSINT research case management, subject and findings tracking, and automated report generation. 
+Osint Report Engine is a web application designed to streamline OSINT research task management, subject and findings tracking, and automated report generation.
 
-It provides a centralized dashboard to track clients, manage cases across various domain categories (e.g., Corporate Governance, Infrastructure, Dark Web), maintain a global risk library, and automatically generate professional, well-formatted PDF reports and Attestation Letters.
+It provides a centralized dashboard to track clients, manage tasks across various domain categories (e.g., Corporate Governance, Infrastructure, Dark Web), maintain a global risk library, and automatically generate professional, well-formatted PDF reports and Attestation Letters.
 
 #### Note from Dan
-This project was forked and refactored from the kairos-reporting-engine. All kudos should go to Tyler for Open Sourcing an awesome tool. I plan to actively use this for research at my day job. Where possible, I will attempt to integrate new features that Tyler releases for his project, and some of my own as I identify anything useful. If you have any ideas, open an "Issue" with a feature request and we can take a look at implementing it. 
+This project was forked and refactored from the kairos-reporting-engine. All kudos should go to Tyler for Open Sourcing an awesome tool. I plan to actively use this for research at my day job. Where possible, I will attempt to integrate new features that Tyler releases for his project, and some of my own as I identify anything useful. If you have any ideas, open an "Issue" with a feature request and we can take a look at implementing it.
 
 ## Key Features
 
@@ -27,14 +27,14 @@ This project was forked and refactored from the kairos-reporting-engine. All kud
 
 - **Finding Imports**: Import findings via CSV (i.e: from tools like OSINT Industries)
 - **Roles**: Implement RBAC for managers, supervisors, operatives (possibly clients)
-- **Disclosure**: Attestation letters aren't really used in OSINT, but a Disclosure Report will make cases court ready
+- **Disclosure**: Attestation letters aren't really used in OSINT, but a Disclosure Report will make tasks court ready
 
 
 ## Prerequisites
 
 Ensure you have the following installed on your system:
 - Python 3.10 or higher
-- System dependencies for WeasyPrint (e.g., `pango`, `cairo`, `libffi`). 
+- System dependencies for WeasyPrint (e.g., `pango`, `cairo`, `libffi`).
   - On Ubuntu/Debian: `sudo apt-get install build-essential python3-dev python3-pip python3-setuptools python3-wheel python3-cffi libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info`
   - On macOS: `brew install pango cairo libffi`
 - `openssl` for generating self-signed certificates.
@@ -163,7 +163,7 @@ The application uses a local SQLite database (`data/osint.db`). On the first run
 
 ## License
 
-This project is released under a custom **Non-Commercial Share-Alike License**. 
+This project is released under a custom **Non-Commercial Share-Alike License**.
 
 In summary:
 - You are completely free to use, modify, and distribute the code.

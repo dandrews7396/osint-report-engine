@@ -18,11 +18,11 @@
 
 - Add "targets" into the workflow
 - Reintroduce richer template sections around target data
-- If needed, generate those report sections from a dedicated target model instead of the current case record
+- If needed, generate those report sections from a dedicated target model instead of the current task record
 
 ## Suggested Testing Focus
 
-- Create a case
+- Create a task
 - Add a finding
 - Generate report
 - Generate attestation

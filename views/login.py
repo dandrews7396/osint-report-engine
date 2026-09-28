@@ -38,7 +38,7 @@ def _record_login_event(user: dict | None, event_type: str, username: str) -> No
 def show_login():
     st.markdown(_HIDE_SIDEBAR_STYLE, unsafe_allow_html=True)
     st.title("Osint Login")
-    
+
     if 'mfa_user' in st.session_state:
         st.info("MFA Token Required")
         with st.form("mfa_form"):
@@ -71,7 +71,7 @@ def show_login():
         username_input = st.text_input("Username")
         password = st.text_input("Passphrase", type="password")
         normalized_username = normalize_username(username_input)
-        
+
         needs_captcha = (st.session_state.get('captcha_required_for') == normalized_username) and normalized_username != ""
         captcha_input = ""
         if needs_captcha:
@@ -81,15 +81,15 @@ def show_login():
                 st.session_state.captcha_text = text
                 st.session_state.captcha_target = normalized_username
                 st.session_state.captcha_image = image.generate(text).getvalue()
-            
+
             st.image(st.session_state.captcha_image)
             captcha_input = st.text_input("Enter CAPTCHA above")
-            
+
         if st.form_submit_button("Login"):
             if not normalized_username:
                 st.error("Please enter a username.")
                 st.rerun()
-                
+
             failed_attempts = get_failed_logins(normalized_username)
             if failed_attempts >= 2:
                 if st.session_state.get('captcha_required_for') != normalized_username:
@@ -104,7 +104,7 @@ def show_login():
                             del st.session_state['captcha_text']
                         st.error("Invalid CAPTCHA.")
                         st.rerun()
-            
+
             user = get_user(normalized_username)
             if not user:
                 try:

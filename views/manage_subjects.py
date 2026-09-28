@@ -9,8 +9,8 @@ from database.subjects import (
     normalize_subject_data,
     subject_display_name,
 )
-from views.case_evidence import (
-    case_evidence_access,
+from views.task_evidence import (
+    task_evidence_access,
     current_user_is_manager,
     render_manager_evidence_browser,
 )
@@ -30,7 +30,7 @@ def delete_subject_dialog(subject_id, subject_name):
     st.warning(f"Are you sure you want to delete subject '{subject_name}'? Linked findings will also be hidden.")
     col1, col2 = st.columns(2)
     if col1.button("Yes, Delete", type="primary", use_container_width=True):
-        db.delete_case_subject(subject_id)
+        db.delete_task_subject(subject_id)
         st.rerun()
     if col2.button("Cancel", use_container_width=True):
         st.rerun()
@@ -90,7 +90,7 @@ def _render_subject_fields(subject_id: int | str, subject_type: str, existing_da
 
 
 def _subject_label(subject: dict) -> str:
-    return f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} (Case link: {subject['relationship_to_case']})"
+    return f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} (Task link: {subject['relationship_to_task']})"
 
 
 def _relationship_option_map(subjects: list[dict], current_subject_id: int | None = None, current_value: str = "") -> dict[str, str]:
@@ -120,46 +120,46 @@ def show_manage_subjects():
                 st.session_state.pop(key, None)
             _clear_subject_widget_state("new", "new_subject")
 
-        st.title("Case Subjects")
-        st.write("Assign multiple subjects to each case, capture the relevant type-specific details, and link findings back to the right subject.")
+        st.title("Task Subjects")
+        st.write("Assign multiple subjects to each task, capture the relevant type-specific details, and link findings back to the right subject.")
 
         if current_user_is_manager():
             render_manager_evidence_browser()
             return
 
-        cases = db.get_cases()
+        tasks = db.get_tasks()
         active_client_id = st.session_state.get('active_client_id')
         if active_client_id:
-            cases = [c for c in cases if c['client_id'] == active_client_id]
+            tasks = [task for task in tasks if task.get("operation_id") in {
+                operation["id"] for operation in db.get_operations(active_client_id)
+            }]
 
-        if not cases:
-            st.warning("Please create a case for the active client first.")
+        if not tasks:
+            st.warning("Please create a task for the active client first.")
             return
 
-        case_id = st.session_state.get("active_case_id")
-        active_case = next((case for case in cases if case["id"] == case_id), None)
-        if active_case is None:
-            st.info("Select an active case from its expander on Manage Cases before adding subjects.")
+        task_id = st.session_state.get("active_task_id")
+        active_task = next((task for task in tasks if task["id"] == task_id), None)
+        if active_task is None:
+            st.info("Open a task from the dashboard or an Operation before adding subjects.")
             return
 
-        evidence_access = case_evidence_access(active_case)
-        if evidence_access.can_mutate:
-            st.success(evidence_access.message)
-        else:
+        evidence_access = task_evidence_access(active_task)
+        if not evidence_access.can_mutate:
             st.warning(evidence_access.message)
             return
 
-        subjects = db.get_case_subjects(case_id)
+        subjects = db.get_task_subjects(task_id)
         edit_subject_id = st.session_state.get('edit_subject_id')
         st.caption(
-            f"Active case: [{active_case.get('case_ref', 'NO-REF')}] {active_case['case_name']}"
+            f"Active task: [{active_task.get('task_ref', 'NO-REF')}] {active_task['task_name']}"
         )
-        st.subheader("Current Case Subjects")
-        st.caption(f"{len(subjects)} subject(s) on this case")
-        st.caption("Internal notes are excluded from generated reports. Use the dedicated notes field only for case-only working notes.")
+        st.subheader("Current Task Subjects")
+        st.caption(f"{len(subjects)} subject(s) on this task")
+        st.caption("Internal notes are excluded from generated reports. Use the dedicated notes field only for task-only working notes.")
 
         if not subjects:
-            st.info("No subjects added to this case yet.")
+            st.info("No subjects added to this task yet.")
         else:
             for subject in sorted(
                 subjects,
@@ -187,10 +187,10 @@ def show_manage_subjects():
                         relationship_options = _relationship_option_map(
                             subjects,
                             current_subject_id=subject['id'],
-                            current_value=subject.get('relationship_to_case', ''),
+                            current_value=subject.get('relationship_to_task', ''),
                         )
                         relationship_option_labels = list(relationship_options.keys())
-                        current_relationship_value = subject.get('relationship_to_case', PRINCIPAL_SUBJECT_RELATIONSHIP)
+                        current_relationship_value = subject.get('relationship_to_task', PRINCIPAL_SUBJECT_RELATIONSHIP)
                         relationship_label = next(
                             (label for label, value in relationship_options.items() if value == current_relationship_value),
                             relationship_option_labels[0],
@@ -209,25 +209,25 @@ def show_manage_subjects():
                         with st.form(f"edit_subject_{subject['id']}"):
                             e_display_name = st.text_input(
                                 "Display Name",
-                                help="Used in case lists and reports.",
+                                help="Used in task lists and reports.",
                                 key=display_key,
                             )
                             e_relationship = st.selectbox(
-                                "Relationship to Case",
+                                "Relationship to Task",
                                 relationship_option_labels,
                                 key=relationship_key,
                             )
                             e_data = _render_subject_fields(subject['id'], e_type, subject.get('subject_data', {}), "edit_subject")
                             e_notes = st.text_area(
                                 "Notes (these will not appear in a generated report)",
-                                help="Internal-only notes for case management. They are not included in generated reports.",
+                                help="Internal-only notes for task management. They are not included in generated reports.",
                                 key=notes_key,
                             )
 
                             if st.form_submit_button("Save Subject Changes"):
                                 cleaned_data = {k: (v or "").strip() for k, v in e_data.items()}
                                 display_name = e_display_name.strip() or subject_display_name(e_type, cleaned_data)
-                                db.update_case_subject(
+                                db.update_task_subject(
                                     subject['id'],
                                     e_type,
                                     relationship_options[e_relationship],
@@ -274,11 +274,11 @@ def show_manage_subjects():
                 col1, col2 = st.columns(2)
                 new_display_name = col1.text_input(
                     "Display Name",
-                    help="Used in case lists and reports.",
+                    help="Used in task lists and reports.",
                     key="new_subject_display_name",
                 )
                 new_relationship = col2.selectbox(
-                    "Relationship to Case",
+                    "Relationship to Task",
                     new_relationship_option_labels,
                     key="new_subject_relationship",
                 )
@@ -286,14 +286,14 @@ def show_manage_subjects():
                 new_notes = st.text_area(
                     "Notes (these will not appear in a generated report)",
                     key="new_subject_notes",
-                    help="Internal-only notes for case management. They are not included in generated reports.",
+                    help="Internal-only notes for task management. They are not included in generated reports.",
                 )
 
                 if st.form_submit_button("Add Subject"):
                     cleaned_data = {k: (v or "").strip() for k, v in new_data.items()}
                     display_name = new_display_name.strip() or subject_display_name(new_type, cleaned_data)
-                    db.add_case_subject(
-                        case_id,
+                    db.add_task_subject(
+                        task_id,
                         new_type,
                         new_relationship_options[new_relationship],
                         display_name,

@@ -38,7 +38,7 @@ def format_date_with_suffix(date_str):
 
 
 def generate_report(
-    case,
+    task,
     client,
     firm,
     findings,
@@ -47,18 +47,17 @@ def generate_report(
     *,
     status="draft",
     approval_data=None,
-    case_start_date=None,
+    task_start_date=None,
     version=None,
     output_directory=None,
 ):
     """
     Generates an OSINT Intelligence PDF report using Jinja2 + WeasyPrint.
-    Dynamically renders case findings, risk distributions, and intelligence evidence.
+    Dynamically renders task findings, risk distributions, and intelligence evidence.
 
-    Legacy callers can continue to pass ``output_path`` positionally. New workflow
-    callers pass ``output_directory`` and ``version`` to obtain a deterministic,
-    non-overwriting path, and use ``status="final"`` with explicit
-    ``approval_data`` for final signoff rendering.
+    Callers may pass ``output_path`` positionally, or ``output_directory`` and
+    ``version`` to obtain a deterministic non-overwriting path. Final reports
+    require explicit ``approval_data`` for sign-off rendering.
     """
     if status not in {"draft", "final"}:
         raise ValueError("status must be either 'draft' or 'final'")
@@ -76,41 +75,41 @@ def generate_report(
                 "output_path, or both output_directory and version, must be provided"
             )
         output_path = build_versioned_output_path(
-            output_directory, case.get("case_ref", ""), version, status=status
+            output_directory, task.get("task_ref", ""), version, status=status
         )
     output_path = os.fspath(output_path)
     if generated_output_path and os.path.exists(output_path):
         raise FileExistsError(f"versioned report already exists: {output_path}")
 
-    # Work on a rendering copy so approval metadata cannot alter persisted case input.
-    case = dict(case)
+    # Work on a rendering copy so approval metadata cannot alter persisted task input.
+    task = dict(task)
     findings = [dict(finding) for finding in findings]
-    case["start_date"] = (
-        case_start_date if case_start_date is not None else case.get("start_date", "")
+    task["start_date"] = (
+        task_start_date if task_start_date is not None else task.get("start_date", "")
     )
     if status == "final":
-        case["end_date"] = approval_end_date(approval_data)
-    case["report_status"] = status
-    case["approval"] = signoff
+        task["end_date"] = approval_end_date(approval_data)
+    task["report_status"] = status
+    task["approval"] = signoff
 
     try:
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
-        
-        case_type = case.get('case_type', '')
-        safe_type = case_type.replace(' ', '_').replace('/', '_')
+
+        task_type = task.get('task_type', '')
+        safe_type = task_type.replace(' ', '_').replace('/', '_')
         custom_template_path = os.path.join(template_dir, f'report_template_{safe_type}.md')
         default_template_path = os.path.join(template_dir, 'report_template.md')
         md_template_path = custom_template_path if os.path.exists(custom_template_path) else default_template_path
-        logger.info("Report template selection: case_type=%r, safe_type=%r, custom_exists=%s, chosen=%s", case_type, safe_type, os.path.exists(custom_template_path), md_template_path)
-        
+        logger.info("Report template selection: task_type=%r, safe_type=%r, custom_exists=%s, chosen=%s", task_type, safe_type, os.path.exists(custom_template_path), md_template_path)
+
         with open(md_template_path, 'r', encoding='utf-8') as f:
             md_content = f.read()
 
         has_detailed_findings_section = 'finding.detailed_findings' in md_content
 
-        case['report_date_formatted'] = format_date_with_suffix(case.get('report_date', ''))
-        case['start_date_formatted'] = format_date_with_suffix(case.get('start_date', ''))
-        case['end_date_formatted'] = format_date_with_suffix(case.get('end_date', ''))
+        task['report_date_formatted'] = format_date_with_suffix(task.get('report_date', ''))
+        task['start_date_formatted'] = format_date_with_suffix(task.get('start_date', ''))
+        task['end_date_formatted'] = format_date_with_suffix(task.get('end_date', ''))
 
         risk_rank = {
             'Critical': 1,
@@ -119,16 +118,16 @@ def generate_report(
             'Low': 4,
             'Informational': 5
         }
-        
+
         # Sort findings strictly by risk_level primary
         findings.sort(key=lambda x: risk_rank.get(x.get('risk_level', 'Informational'), 99))
 
-        case_id = case.get('id')
-        subjects = db.get_case_subjects(case_id) if case_id is not None else []
+        task_id = task.get('id')
+        subjects = db.get_task_subjects(task_id) if task_id is not None else []
         subjects = sorted(
             subjects,
             key=lambda s: (
-                0 if str(s.get('relationship_to_case', '')).lower() == 'principal subject' else 1,
+                0 if str(s.get('relationship_to_task', '')).lower() == 'principal subject' else 1,
                 s.get('id', 0) or 0,
             )
         )
@@ -141,14 +140,14 @@ def generate_report(
             subject['findings'] = findings_by_subject.get(subject['id'], [])
 
         risk_counts = { 'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0 }
-        
+
         for finding in findings:
             risk = finding.get('risk_level', 'Informational')
             if risk in risk_counts:
                 risk_counts[risk] += 1
             else:
                 risk_counts['Informational'] += 1
-            
+
             finding['anchor'] = re.sub(r'[^a-z0-9]+', '-', (finding.get('title') or '').lower()).strip('-')
             finding['category_summary_lines'] = finding_summary_lines(
                 finding.get('category', ''),
@@ -167,7 +166,7 @@ def generate_report(
         table_html += '    </tr>\n'
         table_html += '  </thead>\n'
         table_html += '  <tbody>\n'
-        
+
         color_map = {
             'Critical': '#9b2c2c',
             'High': '#c53030',
@@ -175,11 +174,11 @@ def generate_report(
             'Low': '#38a169',
             'Informational': '#3182ce'
         }
-        
+
         for finding in findings:
             risk = finding.get('risk_level', 'Informational')
             bg_color = color_map.get(risk, '#555')
-            
+
             scope_or_cat = finding.get('category') or 'N/A'
             if scope_or_cat != 'N/A':
                 items = [i.strip() for i in scope_or_cat.split(',') if i.strip()]
@@ -192,30 +191,30 @@ def generate_report(
                 target_html = '<br>'.join(item_links) if item_links else 'N/A'
             else:
                 target_html = 'N/A'
-                
+
             title_slug = finding['anchor']
             if has_detailed_findings_section:
                 title_html = f'<a href="#{title_slug}" style="color: #6b46c1; text-decoration: underline;">{finding["title"]}</a>'
             else:
                 title_html = finding["title"]
             subject_html = finding.get('subject_name') or 'Unassigned'
-            
+
             table_html += f'    <tr>\n'
             table_html += f'      <td style="border: 1px solid #333; padding: 10px; text-align: center; background-color: white;">{title_html}</td>\n'
             table_html += f'      <td style="border: 1px solid #333; padding: 10px; background-color: {bg_color}; color: white; font-weight: bold; text-align: center;">{risk}</td>\n'
             table_html += f'      <td style="border: 1px solid #333; padding: 10px; text-align: center; color: #fff; background-color: #2c3e50;">{target_html}</td>\n'
             table_html += f'      <td style="border: 1px solid #333; padding: 10px; text-align: center; background-color: #1f2933; color: #fff;">{subject_html}</td>\n'
             table_html += f'    </tr>\n'
-            
+
         table_html += '  </tbody>\n</table>\n</div>'
-        
+
         md_content = md_content.replace('{{ findings.table }}', '{{ findings_table }}')
-        
+
         # --- Risk Level Chart Generation ---
         if include_risk_graphs:
             labels = ['Critical', 'High', 'Medium', 'Low', 'Informational']
             counts = [risk_counts.get(risk, 0) for risk in labels]
-            
+
             max_count = max(counts) if counts else 0
             if max_count <= 7:
                 y_max = 7
@@ -223,39 +222,39 @@ def generate_report(
             else:
                 y_max = max_count + (5 - (max_count % 5)) if max_count % 5 != 0 else max_count
                 y_step = max(1, y_max // 5)
-                
+
             fig, ax = plt.subplots(figsize=(7, 4))
             colors = ['#c00000', '#ff0000', '#ff9933', '#ffcc00', '#99cc00']
             bars = ax.bar(labels, counts, color=colors, width=0.5)
-            
+
             ax.set_title('Intelligence Findings by Risk Rating', fontsize=16, fontweight='bold', pad=20)
             ax.set_ylim(0, y_max)
             ax.set_yticks(list(range(0, y_max + 1, y_step)))
-            
+
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
             ax.spines['bottom'].set_color('#333')
             ax.spines['left'].set_color('#333')
-            
+
             for bar in bars:
                 yval = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2.0, yval + (y_max * 0.02), int(yval), ha='center', va='bottom', fontweight='bold', fontsize=12)
-                
+
             chart_directory = os.path.dirname(output_path)
             if chart_directory:
                 os.makedirs(chart_directory, exist_ok=True)
             chart_filename = f"chart_{uuid.uuid4().hex}.png"
             chart_path = os.path.join(os.path.dirname(output_path), chart_filename)
-            
+
             plt.tight_layout()
             plt.savefig(chart_path, dpi=150)
             plt.close(fig)
-            
+
             chart_html = f'<div style="text-align: center; margin: 40px 0; page-break-inside: avoid;"><img src="file://{os.path.abspath(chart_path)}" style="max-width: 600px; width: 100%;"></div>'
-            case['findings_chart'] = chart_html
+            task['findings_chart'] = chart_html
         else:
-            case['findings_chart'] = ''
-        
+            task['findings_chart'] = ''
+
         detailed_findings_md = """
 {% for finding in findings %}
 {% if not loop.first %}
@@ -292,22 +291,22 @@ def generate_report(
         md_content = md_content.replace('{{ findings.detailed_findings }}', detailed_findings_md)
         env = SandboxedEnvironment()
         template = env.from_string(md_content)
-        
+
         firm_dict = dict(firm) if isinstance(firm, dict) else {f.get('key'): f.get('value') for f in firm} if isinstance(firm, list) else {}
         firm_name = firm_dict.get('name') or firm_dict.get('firm_name') or ''
         firm_dict['name'] = firm_name
         firm_dict['firm_name'] = firm_name
-        firm_dict['executive_summary'] = case.get('executive_summary', firm_dict.get('executive_summary', ''))
-        firm_dict['key_findings_summary'] = case.get('key_findings_summary', firm_dict.get('key_findings_summary', ''))
-        firm_dict['legitimate_interest'] = case.get('legitimate_interest', firm_dict.get('legitimate_interest', ''))
-        firm_dict['target_scope'] = case.get('target_scope', firm_dict.get('target_scope', ''))
-        firm_dict['tools_used'] = case.get('tools_used', firm_dict.get('tools_used', ''))
-        
+        firm_dict['executive_summary'] = task.get('executive_summary', firm_dict.get('executive_summary', ''))
+        firm_dict['key_findings_summary'] = task.get('key_findings_summary', firm_dict.get('key_findings_summary', ''))
+        firm_dict['legitimate_interest'] = task.get('legitimate_interest', firm_dict.get('legitimate_interest', ''))
+        firm_dict['target_scope'] = task.get('target_scope', firm_dict.get('target_scope', ''))
+        firm_dict['tools_used'] = task.get('tools_used', firm_dict.get('tools_used', ''))
+
         directory_investigator = next(
             (
                 investigator
                 for investigator in db.get_investigators()
-                if investigator["user_id"] == case.get("lead_investigator_id")
+                if investigator["user_id"] == task.get("lead_investigator_id")
             ),
             None,
         )
@@ -318,22 +317,22 @@ def generate_report(
         }
 
         persona_references = (
-            db.get_case_persona_references(case_id) if case_id is not None else []
+            db.get_task_persona_references(task_id) if task_id is not None else []
         )
         allocated_personas = ", ".join(
             item["persona_reference"] for item in persona_references
         )
-        case['covert_persona_reference'] = (
+        task['covert_persona_reference'] = (
             allocated_personas
-            or case.get('covert_persona_reference')
-            or case.get('prepared_by')
-            or case.get('report_prepared_by')
+            or task.get('covert_persona_reference')
+            or task.get('prepared_by')
+            or task.get('report_prepared_by')
             or investigator.get('name')
             or firm_name
             or 'N/A'
         )
-        
-        tools_str = case.get('tools_used', '[]')
+
+        tools_str = task.get('tools_used', '[]')
         try:
             tools_list = json.loads(tools_str)
             if tools_list and isinstance(tools_list, list):
@@ -343,14 +342,14 @@ def generate_report(
                     desc = t.get('Description', '').replace('\n', '<br>')
                     tools_html += f"<tr><td>{name}</td><td>{desc}</td></tr>\n"
                 tools_html += "</table>\n</div>"
-                case['tools_used_table'] = tools_html
+                task['tools_used_table'] = tools_html
             else:
-                case['tools_used_table'] = tools_str.replace('\n', '<br>')
+                task['tools_used_table'] = tools_str.replace('\n', '<br>')
         except Exception:
-            case['tools_used_table'] = tools_str.replace('\n', '<br>')
-            
+            task['tools_used_table'] = tools_str.replace('\n', '<br>')
+
         rendered_md = template.render(
-            case=case,
+            task=task,
             client=client,
             firm=firm_dict,
             investigator=investigator,
@@ -359,15 +358,15 @@ def generate_report(
             findings_table=table_html,
             report={"status": status, "is_final": status == "final", "approval": signoff},
         )
-        
+
         report_html_body = markdown.markdown(rendered_md, extensions=['fenced_code', 'tables', 'md_in_html', 'toc', 'attr_list'])
-        
+
         html_env = Environment(loader=FileSystemLoader(template_dir))
         html_template = html_env.get_template('report_template.html')
         final_html = html_template.render(
             body=report_html_body,
             firm=firm_dict,
-            case=case,
+            task=task,
             client=client,
             report={"status": status, "is_final": status == "final", "approval": signoff},
         )
@@ -377,7 +376,7 @@ def generate_report(
             os.makedirs(output_directory_name, exist_ok=True)
         project_root = os.path.dirname(os.path.dirname(__file__))
         HTML(string=final_html, base_url=project_root).write_pdf(output_path)
-        
+
         digest = sha256_file(output_path)
         logger.info("Successfully generated OSINT PDF report at %s (SHA-256: %s)", output_path, digest)
         return True
@@ -385,20 +384,20 @@ def generate_report(
         logger.error(f"Failed to generate report: {e}")
         raise
 
-def generate_attestation(case, client, firm, output_path, custom_bio=None):
+def generate_attestation(task, client, firm, output_path, custom_bio=None):
     """
     Generates an OSINT Investigation Attestation Letter PDF.
     """
     try:
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         md_template_path = os.path.join(template_dir, 'attestation_template.md')
-        
+
         with open(md_template_path, 'r', encoding='utf-8') as f:
             md_content = f.read()
 
-        case['report_date_formatted'] = format_date_with_suffix(case.get('report_date', ''))
-        case['start_date_formatted'] = format_date_with_suffix(case.get('start_date', ''))
-        case['end_date_formatted'] = format_date_with_suffix(case.get('end_date', ''))
+        task['report_date_formatted'] = format_date_with_suffix(task.get('report_date', ''))
+        task['start_date_formatted'] = format_date_with_suffix(task.get('start_date', ''))
+        task['end_date_formatted'] = format_date_with_suffix(task.get('end_date', ''))
 
         firm_dict = {f.get('key'): f.get('value') for f in firm} if isinstance(firm, list) else dict(firm) if isinstance(firm, dict) else {}
         firm_name = firm_dict.get('name') or firm_dict.get('firm_name') or ''
@@ -409,7 +408,7 @@ def generate_attestation(case, client, firm, output_path, custom_bio=None):
             (
                 investigator
                 for investigator in db.get_investigators()
-                if investigator["user_id"] == case.get("lead_investigator_id")
+                if investigator["user_id"] == task.get("lead_investigator_id")
             ),
             None,
         )
@@ -425,10 +424,10 @@ def generate_attestation(case, client, firm, output_path, custom_bio=None):
             "title": directory_investigator.get("title", "") if directory_investigator else "",
         }
 
-        case['covert_persona_reference'] = (
-            case.get('covert_persona_reference')
-            or case.get('prepared_by')
-            or case.get('report_prepared_by')
+        task['covert_persona_reference'] = (
+            task.get('covert_persona_reference')
+            or task.get('prepared_by')
+            or task.get('report_prepared_by')
             or investigator.get('name')
             or firm_name
             or 'N/A'
@@ -436,31 +435,31 @@ def generate_attestation(case, client, firm, output_path, custom_bio=None):
 
         env = SandboxedEnvironment()
         template = env.from_string(md_content)
-        
+
         rendered_md = template.render(
-            case=case,
+            task=task,
             client=client,
             firm=firm_dict,
             investigator=investigator
         )
-        
+
         report_html_body = markdown.markdown(rendered_md, extensions=['fenced_code', 'tables', 'md_in_html', 'attr_list'])
-        
+
         html_env = Environment(loader=FileSystemLoader(template_dir))
         html_template = html_env.get_template('attestation_wrapper.html')
         project_root = os.path.dirname(os.path.dirname(__file__))
-        
+
         final_html = html_template.render(
-            content=report_html_body, 
-            firm=firm_dict, 
-            case=case, 
-            client=client, 
+            content=report_html_body,
+            firm=firm_dict,
+            task=task,
+            client=client,
             base_dir=project_root
         )
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         HTML(string=final_html, base_url=project_root).write_pdf(output_path)
-        
+
         logger.info(f"Successfully generated Attestation Letter at {output_path}")
         return True
     except Exception as e:

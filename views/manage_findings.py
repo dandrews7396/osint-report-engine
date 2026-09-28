@@ -9,8 +9,8 @@ from database.findings import (
 )
 from streamlit_jodit import st_jodit
 from utils.helpers import process_base64_images, restore_base64_images, sanitize_rich_html
-from views.case_evidence import (
-    case_evidence_access,
+from views.task_evidence import (
+    task_evidence_access,
     current_user_is_manager,
     render_manager_evidence_browser,
 )
@@ -112,52 +112,52 @@ def show_manage_findings():
         if st.session_state.pop("clear_new_finding_category", False):
             st.session_state.pop("new_finding_category", None)
 
-        st.title("Case Findings & Intelligence")
-        st.write("Populate your cases with verified OSINT findings, including category-specific intelligence data and report-ready captures.")
+        st.title("Task Findings & Intelligence")
+        st.write("Populate your tasks with verified OSINT findings, including category-specific intelligence data and report-ready captures.")
 
         if current_user_is_manager():
             render_manager_evidence_browser()
             return
 
-        cases = db.get_cases()
+        tasks = db.get_tasks()
         active_client_id = st.session_state.get("active_client_id")
         if active_client_id:
-            cases = [case for case in cases if case["client_id"] == active_client_id]
-        if not cases:
-            st.warning("Please create a case for the active client first.")
+            tasks = [task for task in tasks if task.get("operation_id") in {
+                operation["id"] for operation in db.get_operations(active_client_id)
+            }]
+        if not tasks:
+            st.warning("Please create a task for the active client first.")
             return
 
-        case_id = st.session_state.get("active_case_id")
-        active_case = next((case for case in cases if case["id"] == case_id), None)
-        if active_case is None:
-            st.info("Select an active case from its expander on Manage Cases before adding findings.")
+        task_id = st.session_state.get("active_task_id")
+        active_task = next((task for task in tasks if task["id"] == task_id), None)
+        if active_task is None:
+            st.info("Open a task from the dashboard or an Operation before adding findings.")
             return
 
-        evidence_access = case_evidence_access(active_case)
-        if evidence_access.can_mutate:
-            st.success(evidence_access.message)
-        else:
+        evidence_access = task_evidence_access(active_task)
+        if not evidence_access.can_mutate:
             st.warning(evidence_access.message)
             return
 
-        subjects = db.get_case_subjects(case_id)
+        subjects = db.get_task_subjects(task_id)
         subject_options = {"No Subject Linked": None}
         for subject in subjects:
             subject_options[
-                f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} — {subject['relationship_to_case']}"
+                f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} — {subject['relationship_to_task']}"
             ] = subject["id"]
         subject_option_labels = list(subject_options)
         categories = get_domain_category_choices()
         edit_finding_id = st.session_state.get("edit_finding_id")
 
         st.caption(
-            f"Active case: [{active_case.get('case_ref', 'NO-REF')}] {active_case['case_name']}"
+            f"Active task: [{active_task.get('task_ref', 'NO-REF')}] {active_task['task_name']}"
         )
         st.divider()
-        st.subheader("Current Case Intelligence Findings")
-        findings = db.get_case_findings_overview(case_id)
+        st.subheader("Current Task Intelligence Findings")
+        findings = db.get_task_findings_overview(task_id)
         if not findings:
-            st.info("No intelligence findings added to this case yet.")
+            st.info("No intelligence findings added to this task yet.")
 
         for finding in sorted(
             findings,
@@ -174,7 +174,7 @@ def show_manage_findings():
                 if finding.get("subject_name"):
                     st.caption(f"Linked subject: {finding['subject_name']}")
                 if is_editing:
-                    full_finding = db.get_case_finding(finding["id"]) or finding
+                    full_finding = db.get_task_finding(finding["id"]) or finding
                     category_key = f"edit_finding_{finding['id']}_category"
                     st.session_state.setdefault(category_key, full_finding["category"])
                     edit_category = st.selectbox(
@@ -218,7 +218,7 @@ def show_manage_findings():
                         )
 
                         if st.form_submit_button("Save Changes"):
-                            db.update_case_finding(
+                            db.update_task_finding(
                                 finding_id=finding["id"],
                                 domain_category=edit_category,
                                 title=e_title or "",
@@ -227,8 +227,8 @@ def show_manage_findings():
                                 summary=e_summary or "",
                                 detailed_findings=process_base64_images(
                                     sanitize_rich_html(e_details),
-                                    active_case["client_id"],
-                                    case_id,
+                                    active_task["client_id"],
+                                    task_id,
                                 ),
                                 source=e_source or "",
                                 category_data=e_category_data,
@@ -253,7 +253,7 @@ def show_manage_findings():
                         st.session_state.edit_finding_id = finding["id"]
                         st.rerun()
                     if col_delete.button("Delete Finding", key=f"delete_finding_{finding['id']}", use_container_width=True):
-                        db.delete_case_finding(finding["id"])
+                        db.delete_task_finding(finding["id"])
                         st.rerun()
 
         if edit_finding_id is not None:
@@ -272,10 +272,10 @@ def show_manage_findings():
                     }
                     selected_vector_label = st.selectbox("Select Risk Template", list(library_options))
                     imported_subject_label = st.selectbox("Linked Subject (optional)", subject_option_labels)
-                    if st.form_submit_button("Import to Case"):
+                    if st.form_submit_button("Import to Task"):
                         vector = library_options[selected_vector_label]
-                        db.add_case_finding(
-                            case_id=case_id,
+                        db.add_task_finding(
+                            task_id=task_id,
                             subject_id=subject_options[imported_subject_label],
                             domain_category=vector["category"],
                             title=vector["title"],
@@ -284,13 +284,13 @@ def show_manage_findings():
                             summary=vector.get("description", ""),
                             detailed_findings=process_base64_images(
                                 sanitize_rich_html(vector.get("investigative_guidance", "")),
-                                active_case["client_id"],
-                                case_id,
+                                active_task["client_id"],
+                                task_id,
                             ),
                             source=vector.get("refs", ""),
                             category_data={},
                         )
-                        st.success(f"Imported '{vector['title']}' to case. Complete its category-specific fields by editing the finding.")
+                        st.success(f"Imported '{vector['title']}' to task. Complete its category-specific fields by editing the finding.")
                         st.rerun()
 
         st.divider()
@@ -310,8 +310,8 @@ def show_manage_findings():
             mf_source = st.text_input("Source", help="Record the relevant URL, citation, or other source reference.")
 
             if st.form_submit_button("Add Finding") and mf_title:
-                db.add_case_finding(
-                    case_id=case_id,
+                db.add_task_finding(
+                    task_id=task_id,
                     subject_id=subject_options[mf_subject_label],
                     domain_category=new_category,
                     title=mf_title,
@@ -320,8 +320,8 @@ def show_manage_findings():
                     summary=mf_summary,
                     detailed_findings=process_base64_images(
                         sanitize_rich_html(mf_details),
-                        active_case["client_id"],
-                        case_id,
+                        active_task["client_id"],
+                        task_id,
                     ),
                     source=mf_source,
                     category_data=mf_category_data,

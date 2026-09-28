@@ -54,9 +54,9 @@ def show_manage_clients() -> None:
                     if edit.button("Edit", key=f"edit_client_{client['id']}", use_container_width=True):
                         st.session_state.edit_client_id = client["id"]
                         st.rerun()
-                    if activate.button("View cases", key=f"client_cases_{client['id']}", use_container_width=True):
+                    if activate.button("View operations", key=f"client_operations_{client['id']}", use_container_width=True):
                         st.session_state.active_client_id = client["id"]
-                        st.session_state.nav = "Manage Cases"
+                        st.session_state.nav = "Operations"
                         st.rerun()
                     if delete.button("Delete", key=f"delete_client_{client['id']}", use_container_width=True):
                         db.delete_client(client["id"])

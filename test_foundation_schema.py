@@ -29,7 +29,7 @@ class FoundationSchemaTests(unittest.TestCase):
         if os.path.exists(cls.db_path):
             os.remove(cls.db_path)
 
-    def test_roles_profiles_case_lifecycle_and_audit(self):
+    def test_roles_profiles_task_lifecycle_and_audit(self):
         administrator_id = db.add_user("admin", "hash")
         db.update_user_identity("admin", "Admin User", "Operations Manager")
         investigator_id = db.add_user(
@@ -43,39 +43,43 @@ class FoundationSchemaTests(unittest.TestCase):
 
         with db.get_connection() as conn:
             client_id = conn.execute("INSERT INTO clients (name) VALUES (?)", ("Client",)).lastrowid
-            case_id = conn.execute(
-                "INSERT INTO cases (case_ref, case_name, client_id) VALUES (?, ?, ?)",
-                ("REF-1", "Case", client_id),
+            operation_id = conn.execute(
+                "INSERT INTO operations (client_id, operation_name) VALUES (?, ?)",
+                (client_id, "Operation"),
+            ).lastrowid
+            task_id = conn.execute(
+                "INSERT INTO tasks (task_ref, task_name, operation_id) VALUES (?, ?, ?)",
+                ("REF-1", "Task", operation_id),
             ).lastrowid
             conn.commit()
-        operations.assign_case_lead_investigator(case_id, investigator_id, actor_user_id=administrator_id)
+        operations.assign_task_lead_investigator(task_id, investigator_id, actor_user_id=administrator_id)
         self.assertEqual(
-            operations.create_assigned_case(
-                "REF-2", "Self assigned", client_id, actor_user_id=investigator_id
+            operations.create_assigned_task(
+                "REF-2", "Self assigned", operation_id, actor_user_id=investigator_id
             ),
-            case_id + 1,
+            task_id + 1,
         )
-        self.assertEqual(len(operations.get_cases_with_workflow("invest", "investigator")), 2)
-        self.assertEqual(len(operations.get_cases_with_workflow("admin", "administrator")), 2)
-        operations.transition_case_lifecycle(case_id, "in_progress", actor_user_id=investigator_id)
+        self.assertEqual(len(operations.get_tasks_with_workflow("invest", "investigator")), 2)
+        self.assertEqual(len(operations.get_tasks_with_workflow("admin", "administrator")), 2)
+        operations.transition_task_lifecycle(task_id, "in_progress", actor_user_id=investigator_id)
         report_version_id = operations.create_report_version(
-            case_id, 1, actor_user_id=administrator_id, status="final", content_hash="a" * 64,
-            storage_reference="reports/REF-1_v0001_final.pdf", case_start_date="2026-01-01",
+            task_id, 1, actor_user_id=administrator_id, status="final", content_hash="a" * 64,
+            storage_reference="reports/REF-1_v0001_final.pdf", task_start_date="2026-01-01",
             approval_data={"approved_by": "A. Approver", "approved_at": "2026-01-31"},
         )
         with db.get_connection() as conn:
-            case = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
-            self.assertEqual(case["lifecycle_status"], "in_progress")
-            self.assertIsNotNone(case["investigation_started_at"])
-            self.assertEqual(case["investigation_started_by_user_id"], investigator_id)
+            task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+            self.assertEqual(task["lifecycle_status"], "in_progress")
+            self.assertIsNotNone(task["investigation_started_at"])
+            self.assertEqual(task["investigation_started_by_user_id"], investigator_id)
             self.assertGreater(conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0], 0)
-        report_version = operations.get_report_versions(case_id)[0]
+        report_version = operations.get_report_versions(task_id)[0]
         self.assertEqual(report_version["status"], "final")
         self.assertEqual(report_version["approved_by"], "A. Approver")
         self.assertEqual(report_version["review_status"], "approved")
 
         def reserve_draft(_):
-            return operations.reserve_report_version(case_id, status="draft", actor_user_id=investigator_id)
+            return operations.reserve_report_version(task_id, status="draft", actor_user_id=investigator_id)
 
         with ThreadPoolExecutor(max_workers=4) as executor:
             reservations = list(executor.map(reserve_draft, range(4)))
@@ -95,7 +99,7 @@ class FoundationSchemaTests(unittest.TestCase):
             draft["id"], sender_user_id=administrator_id, message="Please confirm the source."
         )
         awaiting_investigator = next(
-            version for version in operations.get_report_versions(case_id)
+            version for version in operations.get_report_versions(task_id)
             if version["id"] == draft["id"]
         )
         self.assertEqual(awaiting_investigator["response_required_by_user_id"], investigator_id)
@@ -104,7 +108,7 @@ class FoundationSchemaTests(unittest.TestCase):
         )
         self.assertEqual(
             next(
-                version for version in operations.get_report_versions(case_id)
+                version for version in operations.get_report_versions(task_id)
                 if version["id"] == draft["id"]
             )["response_required_by_user_id"],
             administrator_id,
@@ -119,7 +123,7 @@ class FoundationSchemaTests(unittest.TestCase):
                 reservation["reservation_id"], actor_user_id=investigator_id
             )
         self.assertGreaterEqual(len(operations.get_audit_events(10)), 3)
-        self.assertIn(report_version_id, [row["id"] for row in operations.get_case_report_versions(case_id)])
+        self.assertIn(report_version_id, [row["id"] for row in operations.get_task_report_versions(task_id)])
         activity = operations.get_management_activity(
             date.today().isoformat(), actor_username="admin", actor_role="administrator"
         )
@@ -139,7 +143,7 @@ class FoundationSchemaTests(unittest.TestCase):
         annual = operations.get_annual_management_summary(
             date.today().year, actor_username="admin", actor_role="administrator"
         )
-        self.assertEqual(annual[0], {"metric_name": "cases_total", "metric_value": 2})
+        self.assertEqual(annual[0], {"metric_name": "tasks_total", "metric_value": 2})
 
     def test_investigator_directory_tracks_profile_completion_and_account_status(self):
         db.add_user("admin", "hash")
@@ -176,33 +180,37 @@ class FoundationSchemaTests(unittest.TestCase):
 
         with db.get_connection() as conn:
             client_id = conn.execute("INSERT INTO clients (name) VALUES (?)", ("Client",)).lastrowid
-            case_id = conn.execute(
-                "INSERT INTO cases (case_ref, case_name, client_id) VALUES (?, ?, ?)",
-                ("REF-DIRECTORY", "Directory Case", client_id),
+            operation_id = conn.execute(
+                "INSERT INTO operations (client_id, operation_name) VALUES (?, ?)",
+                (client_id, "Operation"),
+            ).lastrowid
+            task_id = conn.execute(
+                "INSERT INTO tasks (task_ref, task_name, operation_id) VALUES (?, ?, ?)",
+                ("REF-DIRECTORY", "Directory Task", operation_id),
             ).lastrowid
             conn.commit()
-        operations.assign_case_lead_investigator(
-            case_id, investigator_id, actor_user_id=1
+        operations.assign_task_lead_investigator(
+            task_id, investigator_id, actor_user_id=1
         )
-        workflow_case = next(
-            case
-            for case in operations.get_cases_with_workflow("admin", "administrator")
-            if case["id"] == case_id
+        workflow_task = next(
+            task
+            for task in operations.get_tasks_with_workflow("admin", "administrator")
+            if task["id"] == task_id
         )
-        self.assertEqual(workflow_case["investigator_name"], "I. Vest")
-        self.assertEqual(workflow_case["investigator_description"], "Professional biography")
+        self.assertEqual(workflow_task["investigator_name"], "I. Vest")
+        self.assertEqual(workflow_task["investigator_description"], "Professional biography")
         with db.get_connection() as conn:
             self.assertEqual(
                 conn.execute(
-                    "SELECT lead_investigator_id FROM cases WHERE id = ?", (case_id,)
+                    "SELECT lead_investigator_id FROM tasks WHERE id = ?", (task_id,)
                 ).fetchone()["lead_investigator_id"],
                 investigator_id,
             )
-        operations.assign_case_lead_investigator(case_id, None, actor_user_id=1)
+        operations.assign_task_lead_investigator(task_id, None, actor_user_id=1)
         with db.get_connection() as conn:
             self.assertIsNone(
                 conn.execute(
-                    "SELECT lead_investigator_id FROM cases WHERE id = ?", (case_id,)
+                    "SELECT lead_investigator_id FROM tasks WHERE id = ?", (task_id,)
                 ).fetchone()["lead_investigator_id"]
             )
 
@@ -215,6 +223,46 @@ class FoundationSchemaTests(unittest.TestCase):
         self.assertEqual(format_lifecycle_status("in_progress"), "In Progress")
         self.assertEqual(format_lifecycle_status("submitted"), "Submitted")
         self.assertEqual(format_lifecycle_status(None), "Unknown")
+
+    def test_investigator_can_self_assign_only_within_an_open_operation(self):
+        administrator_id = db.add_user("admin", "hash")
+        investigator_id = db.add_user(
+            "invest", "hash", created_by_username="admin", role="investigator"
+        )
+        with db.get_connection() as conn:
+            client_id = conn.execute(
+                "INSERT INTO clients (name) VALUES (?)", ("Client",)
+            ).lastrowid
+        operation_id = operations.add_operation(
+            client_id, "Continuing matter", actor_user_id=administrator_id
+        )
+
+        task_id = operations.create_assigned_task(
+            "REF-SELF", "Urgent client instruction", operation_id,
+            actor_user_id=investigator_id,
+        )
+        task = next(
+            item for item in operations.get_tasks_with_workflow("invest", "investigator")
+            if item["id"] == task_id
+        )
+        self.assertEqual(task["operation_id"], operation_id)
+        self.assertEqual(task["client_name"], "Client")
+        self.assertEqual(task["operation_name"], "Continuing matter")
+        self.assertEqual(task["lead_investigator_id"], investigator_id)
+        self.assertEqual(task["investigator_name"], "invest")
+        self.assertEqual(task["lifecycle_status"], "preparation")
+
+        operations.update_operation(
+            operation_id,
+            operation_name="Continuing matter",
+            operation_status="closed",
+            actor_user_id=administrator_id,
+        )
+        with self.assertRaisesRegex(ValueError, "open operation"):
+            operations.create_assigned_task(
+                "REF-CLOSED", "Closed matter task", operation_id,
+                actor_user_id=investigator_id,
+            )
 
     def test_investigator_can_accept_feedback_for_assigned_report(self):
         administrator_id = db.add_user("admin", "hash")
@@ -229,16 +277,20 @@ class FoundationSchemaTests(unittest.TestCase):
         )
         with db.get_connection() as conn:
             client_id = conn.execute("INSERT INTO clients (name) VALUES (?)", ("Client",)).lastrowid
-            case_id = conn.execute(
-                "INSERT INTO cases (case_ref, case_name, client_id) VALUES (?, ?, ?)",
-                ("REF-FEEDBACK", "Feedback Case", client_id),
+            operation_id = conn.execute(
+                "INSERT INTO operations (client_id, operation_name) VALUES (?, ?)",
+                (client_id, "Operation"),
+            ).lastrowid
+            task_id = conn.execute(
+                "INSERT INTO tasks (task_ref, task_name, operation_id) VALUES (?, ?, ?)",
+                ("REF-FEEDBACK", "Feedback Task", operation_id),
             ).lastrowid
             conn.commit()
-        operations.assign_case_lead_investigator(
-            case_id, investigator_id, actor_user_id=administrator_id
+        operations.assign_task_lead_investigator(
+            task_id, investigator_id, actor_user_id=administrator_id
         )
         report_id = operations.create_report_version(
-            case_id, 1, actor_user_id=investigator_id, content_hash="a" * 64
+            task_id, 1, actor_user_id=investigator_id, content_hash="a" * 64
         )
         operations.submit_report_version(report_id, actor_user_id=investigator_id)
         operations.claim_report_review(report_id, manager_user_id=manager_id)
@@ -260,25 +312,29 @@ class FoundationSchemaTests(unittest.TestCase):
         db.add_user("admin", "hash")
         with db.get_connection() as conn:
             client_id = conn.execute("INSERT INTO clients (name) VALUES (?)", ("Client",)).lastrowid
-            case_id = conn.execute(
-                "INSERT INTO cases (case_ref, case_name, client_id) VALUES (?, ?, ?)",
-                ("REF-SUBJECTS", "Subject Case", client_id),
+            operation_id = conn.execute(
+                "INSERT INTO operations (client_id, operation_name) VALUES (?, ?)",
+                (client_id, "Operation"),
+            ).lastrowid
+            task_id = conn.execute(
+                "INSERT INTO tasks (task_ref, task_name, operation_id) VALUES (?, ?, ?)",
+                ("REF-SUBJECTS", "Subject Task", operation_id),
             ).lastrowid
             conn.commit()
 
-        operations.add_case_subject(
-            case_id, "Individual", "Principal Subject", "Alex Principal", {}
+        operations.add_task_subject(
+            task_id, "Individual", "Principal Subject", "Alex Principal", {}
         )
-        operations.add_case_subject(
-            case_id, "Organisation", "Alex Principal", "Example Organisation", {}
+        operations.add_task_subject(
+            task_id, "Organisation", "Alex Principal", "Example Organisation", {}
         )
-        operations.add_case_subject(
-            case_id, "Individual", "Principal Subject", "Unrelated Subject", {}
+        operations.add_task_subject(
+            task_id, "Individual", "Principal Subject", "Unrelated Subject", {}
         )
 
         counts = {
             subject["display_name"]: subject["linked_subject_count"]
-            for subject in operations.get_case_subjects(case_id)
+            for subject in operations.get_task_subjects(task_id)
         }
         self.assertEqual(counts["Alex Principal"], 1)
         self.assertEqual(counts["Example Organisation"], 1)
@@ -304,18 +360,22 @@ class FoundationSchemaTests(unittest.TestCase):
         operations.restore_risk_library_item(risk_id, "owner")
         self.assertEqual(len(operations.get_risk_library_entries()), 1)
 
-    def test_persona_references_are_permanent_and_case_unique(self):
+    def test_persona_references_are_permanent_and_task_unique(self):
         administrator_id = db.add_user("admin", "hash")
         with db.get_connection() as conn:
             client_id = conn.execute("INSERT INTO clients (name) VALUES (?)", ("Client",)).lastrowid
-            case_id = conn.execute(
-                "INSERT INTO cases (case_ref, case_name, client_id) VALUES (?, ?, ?)",
-                ("REF-PERSONA", "Persona Case", client_id),
+            operation_id = conn.execute(
+                "INSERT INTO operations (client_id, operation_name) VALUES (?, ?)",
+                (client_id, "Operation"),
+            ).lastrowid
+            task_id = conn.execute(
+                "INSERT INTO tasks (task_ref, task_name, operation_id) VALUES (?, ?, ?)",
+                ("REF-PERSONA", "Persona Task", operation_id),
             ).lastrowid
             conn.commit()
 
-        allocated = operations.add_case_persona_references(
-            case_id,
+        allocated = operations.add_task_persona_references(
+            task_id,
             ["persona-alpha", "PERSONA-BRAVO"],
         )
         self.assertEqual(
@@ -323,7 +383,7 @@ class FoundationSchemaTests(unittest.TestCase):
             ["PERSONA-ALPHA", "PERSONA-BRAVO"],
         )
         with self.assertRaisesRegex(ValueError, "PERSONA-ALPHA"):
-            operations.add_case_persona_references(case_id, ["persona-alpha"])
+            operations.add_task_persona_references(task_id, ["persona-alpha"])
 
         usage = operations.get_persona_reference_usage(date.today().year)
         self.assertEqual(
@@ -342,46 +402,50 @@ class FoundationSchemaTests(unittest.TestCase):
         administrator_id = db.add_user("admin", "hash")
         with db.get_connection() as conn:
             client_id = conn.execute("INSERT INTO clients (name) VALUES (?)", ("Client",)).lastrowid
-            case_id = conn.execute(
-                "INSERT INTO cases (case_ref, case_name, client_id) VALUES (?, ?, ?)",
-                ("REF-DATES", "Date Case", client_id),
+            operation_id = conn.execute(
+                "INSERT INTO operations (client_id, operation_name) VALUES (?, ?)",
+                (client_id, "Operation"),
+            ).lastrowid
+            task_id = conn.execute(
+                "INSERT INTO tasks (task_ref, task_name, operation_id) VALUES (?, ?, ?)",
+                ("REF-DATES", "Date Task", operation_id),
             ).lastrowid
             conn.commit()
 
         with db.get_connection() as conn:
             expected_start_date = conn.execute("SELECT DATE('now')").fetchone()[0]
-        operations.transition_case_lifecycle(case_id, "in_progress", actor_user_id=administrator_id)
+        operations.transition_task_lifecycle(task_id, "in_progress", actor_user_id=administrator_id)
         with db.get_connection() as conn:
             first_start_date = conn.execute(
-                "SELECT start_date FROM cases WHERE id = ?",
-                (case_id,),
+                "SELECT start_date FROM tasks WHERE id = ?",
+                (task_id,),
             ).fetchone()["start_date"]
         self.assertEqual(first_start_date, expected_start_date)
 
         with db.get_connection() as conn:
             expected_end_date = conn.execute("SELECT DATE('now')").fetchone()[0]
-        operations.transition_case_lifecycle(case_id, "submitted", actor_user_id=administrator_id)
+        operations.transition_task_lifecycle(task_id, "submitted", actor_user_id=administrator_id)
         with db.get_connection() as conn:
             first_end_date = conn.execute(
-                "SELECT end_date FROM cases WHERE id = ?",
-                (case_id,),
+                "SELECT end_date FROM tasks WHERE id = ?",
+                (task_id,),
             ).fetchone()["end_date"]
         self.assertEqual(first_end_date, expected_end_date)
 
-        operations.transition_case_lifecycle(case_id, "rejected", actor_user_id=administrator_id)
-        operations.transition_case_lifecycle(case_id, "in_progress", actor_user_id=administrator_id)
-        operations.transition_case_lifecycle(case_id, "submitted", actor_user_id=administrator_id)
+        operations.transition_task_lifecycle(task_id, "rejected", actor_user_id=administrator_id)
+        operations.transition_task_lifecycle(task_id, "in_progress", actor_user_id=administrator_id)
+        operations.transition_task_lifecycle(task_id, "submitted", actor_user_id=administrator_id)
         with db.get_connection() as conn:
             expected_report_date = conn.execute("SELECT DATE('now')").fetchone()[0]
-        operations.transition_case_lifecycle(case_id, "completed", actor_user_id=administrator_id)
+        operations.transition_task_lifecycle(task_id, "completed", actor_user_id=administrator_id)
         with db.get_connection() as conn:
-            case = conn.execute(
-                "SELECT start_date, end_date, report_date FROM cases WHERE id = ?",
-                (case_id,),
+            task = conn.execute(
+                "SELECT start_date, end_date, report_date FROM tasks WHERE id = ?",
+                (task_id,),
             ).fetchone()
-        self.assertEqual(case["start_date"], first_start_date)
-        self.assertEqual(case["end_date"], first_end_date)
-        self.assertEqual(case["report_date"], expected_report_date)
+        self.assertEqual(task["start_date"], first_start_date)
+        self.assertEqual(task["end_date"], first_end_date)
+        self.assertEqual(task["report_date"], expected_report_date)
 
     def test_management_report_configurations_are_private_and_validated(self):
         administrator_id = db.add_user("admin", "hash")

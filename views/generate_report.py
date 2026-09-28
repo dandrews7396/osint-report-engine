@@ -9,18 +9,18 @@ from utils.auth import get_current_user, require_page_auth, user_has_role, verif
 from views.report_document import render_report_document_actions
 
 
-def _assigned(case: dict, user: dict) -> bool:
-    return case.get("lead_investigator_id") == user.get("id")
+def _assigned(task: dict, user: dict) -> bool:
+    return task.get("lead_investigator_id") == user.get("id")
 
 
-def _render_readiness(case: dict, subjects: list[dict], findings: list[dict]) -> None:
+def _render_readiness(task: dict, subjects: list[dict], findings: list[dict]) -> None:
     checks = (
-        ("Tasking", bool((case.get("target_scope") or "").strip())),
-        ("Legal authority", bool((case.get("legitimate_interest_assessment") or "").strip())),
-        ("Personas", bool(db.get_case_persona_references(case["id"]))),
-        ("Summary", bool((case.get("executive_assessment") or "").strip())),
-        ("Recommendations", bool((case.get("key_findings_summary") or "").strip())),
-        ("Tools", bool((case.get("tools_and_sources_used") or "").strip())),
+        ("Tasking", bool((task.get("target_scope") or "").strip())),
+        ("Legal authority", bool((task.get("legitimate_interest_assessment") or "").strip())),
+        ("Personas", bool(db.get_task_persona_references(task["id"]))),
+        ("Summary", bool((task.get("executive_assessment") or "").strip())),
+        ("Recommendations", bool((task.get("key_findings_summary") or "").strip())),
+        ("Tools", bool((task.get("tools_and_sources_used") or "").strip())),
     )
     with st.container(border=True):
         st.markdown("#### Report Readiness")
@@ -65,10 +65,10 @@ def _status_label(version: dict) -> str:
     return "Draft"
 
 
-def _render_feedback(case: dict, version: dict, user: dict) -> None:
+def _render_feedback(task: dict, version: dict, user: dict) -> None:
     messages = db.get_report_review_messages(version["id"])
     open_key = f"report_feedback_open_{version['id']}"
-    if st.session_state.pop("open_report_feedback_case_id", None) == case["id"]:
+    if st.session_state.pop("open_report_feedback_task_id", None) == task["id"]:
         st.session_state[open_key] = True
     if messages and st.button("Feedback", key=f"report_feedback_toggle_{version['id']}"):
         st.session_state[open_key] = not st.session_state.get(open_key, False)
@@ -96,7 +96,7 @@ def _render_feedback(case: dict, version: dict, user: dict) -> None:
     if messages and st.button("Accept feedback", key=f"accept_report_feedback_{version['id']}"):
         try:
             db.accept_report_feedback(version["id"], investigator_user_id=user["id"])
-            db.transition_case_lifecycle(case["id"], "rejected", actor_user_id=user["id"])
+            db.transition_task_lifecycle(task["id"], "rejected", actor_user_id=user["id"])
         except (PermissionError, ValueError) as exc:
             st.error(f"Unable to accept feedback: {exc}")
         else:
@@ -104,7 +104,7 @@ def _render_feedback(case: dict, version: dict, user: dict) -> None:
 
 
 def _render_current_document(
-    case: dict,
+    task: dict,
     version: dict | None,
     user: dict,
     *,
@@ -120,23 +120,23 @@ def _render_current_document(
         if verified:
             right.markdown(f"**{_status_label(version)} · Verified**")
         if not read_only:
-            _render_feedback(case, version, user)
+            _render_feedback(task, version, user)
 
 
-def _generate_draft(case: dict, findings: list[dict], user: dict) -> None:
-    client = next((item for item in db.get_clients() if item["id"] == case["client_id"]), None)
+def _generate_draft(task: dict, findings: list[dict], user: dict) -> None:
+    client = next((item for item in db.get_clients() if item["id"] == task["client_id"]), None)
     reservation = None
     output_path = None
     wrote_artifact = False
     try:
-        reservation = db.reserve_report_version(case["id"], status="draft", actor_user_id=user["id"])
+        reservation = db.reserve_report_version(task["id"], status="draft", actor_user_id=user["id"])
         output_path = build_versioned_output_path(
-            "reports", case.get("case_ref") or f"case-{case['id']}",
+            "reports", task.get("task_ref") or f"task-{task['id']}",
             reservation["version_number"], status="draft",
         )
         output_path.parent.mkdir(exist_ok=True)
         generate_report(
-            case, client, db.get_settings(), findings,
+            task, client, db.get_settings(), findings,
             include_risk_graphs=True, status="draft", version=reservation["version_number"],
             output_directory=output_path.parent,
         )
@@ -146,7 +146,7 @@ def _generate_draft(case: dict, findings: list[dict], user: dict) -> None:
         db.finalize_report_version_reservation(
             reservation["reservation_id"], actor_user_id=user["id"],
             content_hash=digest, storage_reference=str(output_path),
-            case_start_date=case.get("start_date"),
+            task_start_date=task.get("start_date"),
         )
     except Exception as exc:
         if reservation:
@@ -172,46 +172,46 @@ def show_generate_report() -> None:
         st.info("Managers review and sign off submitted reports; investigators generate and submit drafts.")
         return
 
-    active_case_id = st.session_state.get("active_case_id")
-    case = next(
+    active_task_id = st.session_state.get("active_task_id")
+    task = next(
         (
-            item for item in db.get_cases_with_workflow()
-            if item["id"] == active_case_id and _assigned(item, user)
+            item for item in db.get_tasks_with_workflow()
+            if item["id"] == active_task_id and _assigned(item, user)
         ),
         None,
     )
-    if not case:
+    if not task:
         st.title("Generate Report Draft")
-        st.info("Select an active assigned case from Manage Cases before generating a report.")
+        st.info("Open an active assigned task from the dashboard or an Operation before generating a report.")
         return
 
-    lifecycle_status = case.get("lifecycle_status")
+    lifecycle_status = task.get("lifecycle_status")
     st.title("View Report" if lifecycle_status == "completed" else "Generate Report Draft")
-    st.caption(f"[{case.get('case_ref', 'NO-REF')}] {case['case_name']}")
-    versions = db.get_report_versions(case["id"])
+    st.caption(f"[{task.get('task_ref', 'NO-REF')}] {task['task_name']}")
+    versions = db.get_report_versions(task["id"])
     if lifecycle_status == "completed":
         final_report = _latest_final(versions)
         if not final_report:
-            st.error("No finalized report is recorded for this completed case.")
+            st.error("No finalized report is recorded for this completed task.")
             return
-        _render_current_document(case, final_report, user, read_only=True)
+        _render_current_document(task, final_report, user, read_only=True)
         return
 
-    subjects = db.get_case_subjects(case["id"])
-    findings = db.get_case_findings(case["id"])
+    subjects = db.get_task_subjects(task["id"])
+    findings = db.get_task_findings(task["id"])
     current_draft = _latest_draft(versions)
-    _render_readiness(case, subjects, findings)
-    _render_current_document(case, current_draft, user)
+    _render_readiness(task, subjects, findings)
+    _render_current_document(task, current_draft, user)
 
     if lifecycle_status in {"in_progress", "rejected"}:
         label = "Generate Revised Draft" if current_draft else "Generate Draft"
         if st.button(label, type="primary"):
             if not findings:
-                st.error("A draft cannot be generated until the case has at least one finding.")
+                st.error("A draft cannot be generated until the task has at least one finding.")
                 return
-            _generate_draft(case, findings, user)
+            _generate_draft(task, findings, user)
 
-        with st.form(f"submit_draft_{case['id']}"):
+        with st.form(f"submit_draft_{task['id']}"):
             submit_password = st.text_input("Current password to submit", type="password")
             submit_requested = st.form_submit_button("Submit")
         if submit_requested:
@@ -219,13 +219,13 @@ def show_generate_report() -> None:
                 st.error("Current password verification failed.")
                 return
             if not current_draft or current_draft.get("review_status") not in {"draft", "rejected"}:
-                st.error("Generate a recorded draft before submitting this case.")
+                st.error("Generate a recorded draft before submitting this task.")
                 return
             try:
                 db.submit_report_version(current_draft["id"], actor_user_id=user["id"])
-                db.transition_case_lifecycle(case["id"], "submitted", actor_user_id=user["id"])
+                db.transition_task_lifecycle(task["id"], "submitted", actor_user_id=user["id"])
             except ValueError as exc:
-                st.error(f"Unable to submit this case: {exc}")
+                st.error(f"Unable to submit this task: {exc}")
             else:
                 st.success("Draft submitted.")
                 st.rerun()

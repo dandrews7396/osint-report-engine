@@ -25,11 +25,11 @@ sys.modules['database.findings'] = finding_schema
 
 from reporting.generator import generate_report, generate_attestation
 
-# Mock OSINT Case Data
-case_data = {
-    'case_name': 'Project Apex External Intelligence Assessment',
-    'case_ref': 'OSINT-2026-0812',
-    'case_type': 'Enhanced Due Diligence',
+# Mock OSINT Task Data
+task_data = {
+    'task_name': 'Project Apex External Intelligence Assessment',
+    'task_ref': 'OSINT-2026-0812',
+    'task_type': 'Enhanced Due Diligence',
     'report_date': '2026-08-12',
     'start_date': '2026-08-01',
     'end_date': '2026-08-10',
@@ -51,10 +51,10 @@ client_data = {
 
 firm_data = {
     'name': 'OSINT Intelligence Group',
-    'executive_summary': case_data['executive_summary'],
-    'key_findings_summary': case_data['key_findings_summary'],
-    'target_scope': case_data['target_scope'],
-    'legitimate_interest': case_data['legitimate_interest']
+    'executive_summary': task_data['executive_summary'],
+    'key_findings_summary': task_data['key_findings_summary'],
+    'target_scope': task_data['target_scope'],
+    'legitimate_interest': task_data['legitimate_interest']
 }
 
 # Sample OSINT Findings Dataset
@@ -111,11 +111,11 @@ output_attestation_path = os.path.join(output_dir, 'Sample_OSINT_Attestation_Let
 print("Starting PDF generation test...")
 
 # 1. Generate OSINT Intelligence Report
-generate_report(case_data, client_data, firm_data, findings_data, output_report_path)
+generate_report(task_data, client_data, firm_data, findings_data, output_report_path)
 print(f"✓ OSINT Intelligence Report generated at: {os.path.abspath(output_report_path)}")
 
 # 2. Generate OSINT Attestation Letter
-generate_attestation(case_data, client_data, firm_data, output_attestation_path)
+generate_attestation(task_data, client_data, firm_data, output_attestation_path)
 print(f"✓ OSINT Attestation Letter generated at: {os.path.abspath(output_attestation_path)}")
 
 print("\nTest completed successfully!")

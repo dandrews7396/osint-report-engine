@@ -56,11 +56,11 @@ ROLE_NAVIGATION = {
         "Administrator Dashboard", "Users & Accounts", "Audit Log", "Application Settings", "Templates", "Profile",
     ],
     "manager": [
-        "Manager Dashboard", "Manage Clients", "Manage Cases", "Case Evidence", "Risk Library",
+        "Manager Dashboard", "Manage Clients", "Operations", "Manage Tasks", "Task Evidence", "Risk Library",
         "Report Review", "Management Summary", "Profile",
     ],
     "investigator": [
-        "Investigator Dashboard", "Clients", "My Cases", "Manage Subjects", "Case Findings",
+        "Investigator Dashboard", "Tasks", "Manage Subjects", "Task Findings",
         "Risk Library", "Generate Report", "Profile",
     ],
 }
@@ -86,7 +86,7 @@ def main():
                 get_cookie_controller().remove('kairos_auth_token')
         else:
             get_cookie_controller().remove('kairos_auth_token')
-        
+
     if not st.session_state.get('logged_in'):
         if get_user_count() == 0:
             show_setup()
@@ -114,16 +114,27 @@ def main():
     elif st.session_state.nav in {"Manage Clients", "Clients"}:
         from views.manage_clients import show_manage_clients
         show_manage_clients()
-    elif st.session_state.nav in {"Manage Cases", "My Cases"}:
-        from views.manage_cases import show_manage_cases
-        show_manage_cases()
+    elif st.session_state.nav == "Operations":
+        if st.session_state.get("show_operation_workspace"):
+            from views.operation_workspace import show_operation_workspace
+            show_operation_workspace()
+        else:
+            from views.manage_operations import show_manage_operations
+            show_manage_operations()
+    elif st.session_state.nav in {"Manage Tasks", "Tasks"}:
+        if st.session_state.get("show_task_workspace"):
+            from views.task_workspace import show_task_workspace
+            show_task_workspace()
+        else:
+            from views.manage_tasks import show_manage_tasks
+            show_manage_tasks()
     elif st.session_state.nav == "Manage Subjects":
         from views.manage_subjects import show_manage_subjects
         show_manage_subjects()
-    elif st.session_state.nav == "Case Evidence":
-        from views.case_evidence import render_manager_evidence_browser
+    elif st.session_state.nav == "Task Evidence":
+        from views.task_evidence import render_manager_evidence_browser
         render_manager_evidence_browser()
-    elif st.session_state.nav == "Case Findings":
+    elif st.session_state.nav == "Task Findings":
         from views.manage_findings import show_manage_findings
         show_manage_findings()
     elif st.session_state.nav == "Risk Library":

@@ -4,43 +4,58 @@ from html import escape
 import streamlit as st
 
 from database import operations as db
+from database.db import get_users
 from utils.auth import get_current_user, require_page_auth, user_has_role
 from utils.helpers import format_lifecycle_status
 
 
-def _case_state(case: dict) -> str:
-    return case.get("lifecycle_status", "preparation")
+def _task_state(task: dict) -> str:
+    return task.get("lifecycle_status", "preparation")
 
 
-def _assigned_to(case: dict, user: dict) -> bool:
+def _assigned_to(task: dict, user: dict) -> bool:
     """Support the current display-name assignment and the foundation user-id assignment."""
+    user_names = {
+        value
+        for value in (user.get("username"), user.get("display_name"))
+        if value
+    }
     return (
-        case.get("lead_investigator_id") == user.get("id")
-        or case.get("investigator_user_id") == user.get("id")
-        or case.get("investigator_name") in {user.get("username"), user.get("display_name")}
+        task.get("lead_investigator_id") == user.get("id")
+        or task.get("investigator_user_id") == user.get("id")
+        or (
+            bool(task.get("investigator_name"))
+            and task["investigator_name"] in user_names
+        )
     )
 
 
 def _go(
     page: str,
-    case_id: int | None = None,
+    task_id: int | None = None,
     *,
-    open_case_editor: bool = False,
+    operation_id: int | None = None,
+    open_task_editor: bool = False,
+    open_task_workspace: bool = False,
     open_report_feedback: bool = False,
 ) -> None:
-    if case_id is not None:
-        st.session_state.active_case_id = case_id
-    if open_case_editor and case_id is not None:
-        st.session_state.edit_case_id = case_id
-    if open_report_feedback and case_id is not None:
-        st.session_state.open_report_feedback_case_id = case_id
+    if task_id is not None:
+        st.session_state.active_task_id = task_id
+    if operation_id is not None:
+        st.session_state.selected_operation_id = operation_id
+    if open_task_editor and task_id is not None:
+        st.session_state.edit_task_id = task_id
+    if open_task_workspace:
+        st.session_state.show_task_workspace = True
+    if open_report_feedback and task_id is not None:
+        st.session_state.open_report_feedback_task_id = task_id
     st.session_state.nav = page
     st.rerun()
 
 
-def _workflow_cases() -> list[dict]:
-    getter = getattr(db, "get_cases_with_workflow", None)
-    return getter() if callable(getter) else db.get_cases()
+def _workflow_tasks() -> list[dict]:
+    getter = getattr(db, "get_tasks_with_workflow", None)
+    return getter() if callable(getter) else db.get_tasks()
 
 
 def _render_centered_metric(label: str, value: int) -> None:
@@ -130,74 +145,74 @@ def _render_rolling_activity(user: dict) -> None:
     )
 
 
-def _render_investigator_dashboard(user: dict, cases: list[dict]) -> None:
-    assigned = [case for case in cases if _assigned_to(case, user)]
+def _render_investigator_dashboard(user: dict, tasks: list[dict]) -> None:
+    assigned = [task for task in tasks if _assigned_to(task, user)]
     sections = (
-        ("New Investigations", "preparation", "Begin", "Manage Cases", "in_progress"),
-        ("Ongoing Investigations", "in_progress", "Open", "Manage Subjects", None),
+        ("New Investigations", "preparation", "Begin", "Tasks", "in_progress"),
+        ("Ongoing Investigations", "in_progress", "Open", "Tasks", None),
     )
     for heading, status, action, destination, transition_to in sections:
-        st.subheader(heading)
-        queue = [case for case in assigned if _case_state(case) == status]
-        if not queue:
-            st.caption("No cases in this queue.")
-            continue
-        for case in queue:
+        queue = [task for task in assigned if _task_state(task) == status]
+        with st.expander(f"{heading} · {len(queue)}"):
+            if not queue:
+                st.caption("No tasks in this queue.")
+            for task in queue:
+                with st.container(border=True):
+                    left, right = st.columns((6, 1), vertical_alignment="center")
+                    left.markdown(
+                        f"**[{task.get('task_ref', 'NO-REF')}] {task['task_name']}**"
+                        f" • {task.get('operation_name', 'Unknown operation')}"
+                    )
+                    if right.button(action, key=f"dashboard_{status}_{task['id']}"):
+                        if transition_to:
+                            try:
+                                db.transition_task_lifecycle(
+                                    task["id"],
+                                    transition_to,
+                                    actor_user_id=user["id"],
+                                )
+                            except ValueError as exc:
+                                st.error(f"Unable to begin investigation: {exc}")
+                                return
+                        _go(
+                            destination,
+                            task["id"],
+                            operation_id=task.get("operation_id"),
+                            open_task_editor=transition_to == "in_progress",
+                            open_task_workspace=True,
+                        )
+
+    completed = [task for task in assigned if _task_state(task) == "completed"]
+    with st.expander(f"Completed Investigations · {len(completed)}"):
+        if not completed:
+            st.caption("No tasks in this queue.")
+        for task in completed:
             with st.container(border=True):
                 left, right = st.columns((6, 1), vertical_alignment="center")
                 left.markdown(
-                    f"**[{case.get('case_ref', 'NO-REF')}] {case['case_name']}**"
-                    f" • {case.get('client_name', 'Unknown client')} • {format_lifecycle_status(status)}"
+                    f"**[{task.get('task_ref', 'NO-REF')}] {task['task_name']}**"
+                    f" • {task.get('operation_name', 'Unknown operation')}"
                 )
-                if right.button(action, key=f"dashboard_{status}_{case['id']}"):
-                    if transition_to:
-                        try:
-                            db.transition_case_lifecycle(
-                                case["id"],
-                                transition_to,
-                                actor_user_id=user["id"],
-                            )
-                        except ValueError as exc:
-                            st.error(f"Unable to begin investigation: {exc}")
-                            return
-                    _go(
-                        destination,
-                        case["id"],
-                        open_case_editor=transition_to == "in_progress",
-                    )
+                if right.button("View Report", key=f"dashboard_completed_{task['id']}"):
+                    _go("Generate Report", task["id"])
 
-    st.subheader("Completed Investigations")
-    completed = [case for case in assigned if _case_state(case) == "completed"]
-    if not completed:
-        st.caption("No cases in this queue.")
-    for case in completed:
-        with st.container(border=True):
-            left, right = st.columns((6, 1), vertical_alignment="center")
-            left.markdown(
-                f"**[{case.get('case_ref', 'NO-REF')}] {case['case_name']}**"
-                f" • {case.get('client_name', 'Unknown client')}"
-            )
-            if right.button("View Report", key=f"dashboard_completed_{case['id']}"):
-                _go("Generate Report", case["id"])
-
-    st.subheader("Review Responses")
     responses = [
         version
         for version in db.get_submitted_report_versions()
         if version.get("response_required_by_user_id") == user["id"]
     ]
-    if not responses:
-        st.caption("No cases in this queue.")
-        return
-    for version in responses:
-        with st.container(border=True):
-            left, right = st.columns((6, 1), vertical_alignment="center")
-            left.markdown(f"**[{version.get('case_ref', 'NO-REF')}] {version['case_name']}**")
-            if right.button("View", key=f"dashboard_review_response_{version['id']}"):
-                _go("Generate Report", version["case_id"], open_report_feedback=True)
+    with st.expander(f"Review Responses · {len(responses)}"):
+        if not responses:
+            st.caption("No tasks in this queue.")
+        for version in responses:
+            with st.container(border=True):
+                left, right = st.columns((6, 1), vertical_alignment="center")
+                left.markdown(f"**[{version.get('task_ref', 'NO-REF')}] {version['task_name']}**")
+                if right.button("View", key=f"dashboard_review_response_{version['id']}"):
+                    _go("Generate Report", version["task_id"], open_report_feedback=True)
 
 
-def _render_manager_dashboard(user: dict, cases: list[dict]) -> None:
+def _render_manager_dashboard(user: dict, tasks: list[dict]) -> None:
     metric_heading, metric_selector = st.columns((5, 2), vertical_alignment="center")
     metric_heading.subheader("Operational Metrics")
     timeframe = metric_selector.selectbox(
@@ -234,23 +249,23 @@ def _render_manager_dashboard(user: dict, cases: list[dict]) -> None:
     st.subheader("Manager Queues")
     queues = (
         ("Reports awaiting review", "submitted", "Report Review"),
-        ("Preparation awaiting investigator start", "preparation", "Manage Cases"),
-        ("Returned to investigator", "rejected", "Manage Cases"),
+        ("Preparation awaiting investigator start", "preparation", "Manage Tasks"),
+        ("Returned to investigator", "rejected", "Manage Tasks"),
     )
     for title, status, destination in queues:
-        queue = [case for case in cases if _case_state(case) == status]
+        queue = [task for task in tasks if _task_state(task) == status]
         with st.expander(f"{title} ({len(queue)})", expanded=False):
             if not queue:
-                st.caption("No cases in this queue.")
-            for case in queue:
+                st.caption("No tasks in this queue.")
+            for task in queue:
                 with st.container(border=True):
                     left, right = st.columns((6, 1), vertical_alignment="center")
                     left.markdown(
-                        f"**[{case.get('case_ref', 'NO-REF')}] {case['case_name']}**"
-                        f" • {case.get('investigator_name') or 'Unassigned'}"
+                        f"**[{task.get('task_ref', 'NO-REF')}] {task['task_name']}**"
+                        f" • {task.get('investigator_name') or 'Unassigned'}"
                     )
-                    if right.button("Open", key=f"manager_queue_{status}_{case['id']}"):
-                        _go(destination, case["id"])
+                    if right.button("Open", key=f"manager_queue_{status}_{task['id']}"):
+                        _go(destination, task["id"], operation_id=task.get("operation_id"))
 
     st.subheader("Management Reporting")
     if st.button("Open Reporting View", use_container_width=True):
@@ -258,7 +273,7 @@ def _render_manager_dashboard(user: dict, cases: list[dict]) -> None:
 
 
 def _render_administrator_dashboard() -> None:
-    users = db.get_users()
+    users = get_users()
     events = db.get_audit_events(limit=1000)
     cutoff = datetime.now() - timedelta(hours=24)
 
@@ -304,10 +319,10 @@ def show_dashboard() -> None:
     if not user:
         return
     st.title("Operational Dashboard")
-    cases = _workflow_cases()
+    tasks = _workflow_tasks()
     if user_has_role(user, "manager"):
-        _render_manager_dashboard(user, cases)
+        _render_manager_dashboard(user, tasks)
     elif user_has_role(user, "administrator"):
         _render_administrator_dashboard()
     else:
-        _render_investigator_dashboard(user, cases)
+        _render_investigator_dashboard(user, tasks)

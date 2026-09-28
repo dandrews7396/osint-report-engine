@@ -6,34 +6,34 @@
 
 <table class="edd-cover-grid">
   <tr>
-    <td class="label">Case Ref:</td>
-    <td class="value">{{ case.case_ref }}</td>
+    <td class="label">Task Ref:</td>
+    <td class="value">{{ task.task_ref }}</td>
     <td class="label">Classification:</td>
     <td class="value highlight-red">STRICTLY CONFIDENTIAL</td>
   </tr>
   <tr>
     <td class="label">Date:</td>
-    <td class="value">{% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.report_date %}{{ task.report_date }}{% else %}N/A{% endif %}</td>
     <td class="label">Subject Entity:</td>
-    <td class="value"><strong>{% if case.target_company_name %}{{ case.target_company_name }}{% else %}N/A{% endif %}</strong></td>
+    <td class="value"><strong>{% if task.target_company_name %}{{ task.target_company_name }}{% else %}N/A{% endif %}</strong></td>
   </tr>
   <tr>
     <td class="label">Client Name:</td>
     <td class="value">{{ client.name }}</td>
     <td class="label">Company No:</td>
-    <td class="value">{% if case.company_number %}{{ case.company_number }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.company_number %}{{ task.company_number }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="label">Instructing Ref:</td>
-    <td class="value">{% if case.instructing_ref %}{{ case.instructing_ref }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.instructing_ref %}{{ task.instructing_ref }}{% else %}N/A{% endif %}</td>
     <td class="label">Primary Target / UBO:</td>
-    <td class="value">{% if case.primary_target_name %}{{ case.primary_target_name }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.primary_target_name %}{{ task.primary_target_name }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="label">Lead Investigator:</td>
-    <td class="value">{% if case.investigator_name %}{{ case.investigator_name }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.investigator_name %}{{ task.investigator_name }}{% else %}N/A{% endif %}</td>
     <td class="label">Investigation Period:</td>
-    <td class="value">{% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} – {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.start_date %}{{ task.start_date }}{% else %}N/A{% endif %} – {% if task.end_date %}{{ task.end_date }}{% else %}N/A{% endif %}</td>
   </tr>
 </table>
 
@@ -41,17 +41,17 @@
 
 ## 1. Executive Summary & Overall Risk Rating
 
-<div class="risk-summary-box {{ case.overall_risk_level | lower | replace(' ', '-') }}">
-  <strong>Overall Risk Classification:</strong> {% if case.overall_risk_classification %}{{ case.overall_risk_classification }}{% else %}N/A{% endif %}
+<div class="risk-summary-box {{ task.overall_risk_level | lower | replace(' ', '-') }}">
+  <strong>Overall Risk Classification:</strong> {% if task.overall_risk_classification %}{{ task.overall_risk_classification }}{% else %}N/A{% endif %}
 </div>
 
 ### 1.1 Instruction & Scope
-{{ firm.name }} was instructed by {{ client.name }} on {% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} to conduct an Enhanced Due Diligence (EDD) background investigation into **{% if case.target_company_name %}{{ case.target_company_name }}{% else %}N/A{% endif %}** and its key controlling officers, specifically **{% if case.primary_target_name %}{{ case.primary_target_name }}{% else %}N/A{% endif %}**. The objective of this report is to evaluate corporate integrity, identify undisclosed financial risks, map beneficial ownership structures, and detect adverse media or legal regulatory flags.
+{{ firm.name }} was instructed by {{ client.name }} on {% if task.start_date %}{{ task.start_date }}{% else %}N/A{% endif %} to conduct an Enhanced Due Diligence (EDD) background investigation into **{% if task.target_company_name %}{{ task.target_company_name }}{% else %}N/A{% endif %}** and its key controlling officers, specifically **{% if task.primary_target_name %}{{ task.primary_target_name }}{% else %}N/A{% endif %}**. The objective of this report is to evaluate corporate integrity, identify undisclosed financial risks, map beneficial ownership structures, and detect adverse media or legal regulatory flags.
 
 ### 1.2 Key Findings Matrix
 A summary of critical risk indicators identified during open-source intelligence gathering is detailed below:
 
-{% if case.findings_matrix_table %}{{ case.findings_matrix_table | safe }}{% else %}{{ findings_table | safe }}{% endif %}
+{% if task.findings_matrix_table %}{{ task.findings_matrix_table | safe }}{% else %}{{ findings_table | safe }}{% endif %}
 
 <div class="executive-assessment-block">
   <strong>Executive Assessment:</strong> {% if firm.executive_summary %}{{ firm.executive_summary }}{% else %}N/A{% endif %}
@@ -68,34 +68,34 @@ A summary of critical risk indicators identified during open-source intelligence
 <table class="edd-keyvalue-table">
   <tr>
     <td class="kv-label">Registered Legal Name:</td>
-    <td class="kv-value">{% if case.target_company_name %}{{ case.target_company_name }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.target_company_name %}{{ task.target_company_name }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Company Registration No:</td>
-    <td class="kv-value">{% if case.company_number %}{{ case.company_number }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.company_number %}{{ task.company_number }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Date of Incorporation:</td>
-    <td class="kv-value">{% if case.incorporation_date %}{{ case.incorporation_date }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.incorporation_date %}{{ task.incorporation_date }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Registered Office Address:</td>
-    <td class="kv-value">{% if case.registered_address %}{{ case.registered_address }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.registered_address %}{{ task.registered_address }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Company Type & SIC Code:</td>
-    <td class="kv-value">{% if case.company_type_sic %}{{ case.company_type_sic }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.company_type_sic %}{{ task.company_type_sic }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Current Filing Status:</td>
-    <td class="kv-value">{% if case.filing_status %}{{ case.filing_status }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.filing_status %}{{ task.filing_status }}{% else %}N/A{% endif %}</td>
   </tr>
 </table>
 
 ### 2.2 Ownership & PSC (Persons with Significant Control) Mapping
 Analysis of official statutory registers and corporate filings reveals the following beneficial ownership structure:
 
-{% if case.psc_mapping_table %}{{ case.psc_mapping_table | safe }}{% endif %}
+{% if task.psc_mapping_table %}{{ task.psc_mapping_table | safe }}{% endif %}
 
 ---
 
@@ -103,34 +103,34 @@ Analysis of official statutory registers and corporate filings reveals the follo
 
 Background analysis was conducted on primary officers to identify corporate track records, overlapping directorships, and personal financial integrity flags.
 
-{% if case.primary_target_name %}### 3.1 Director Profile: {{ case.primary_target_name }}{% endif %}
+{% if task.primary_target_name %}### 3.1 Director Profile: {{ task.primary_target_name }}{% endif %}
 
 <table class="edd-keyvalue-table">
   <tr>
     <td class="kv-label">Full Name & Aliases:</td>
-    <td class="kv-value">{% if case.target_aliases %}{{ case.target_aliases }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.target_aliases %}{{ task.target_aliases }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Date of Birth & Nationality:</td>
-    <td class="kv-value">{% if case.target_dob_nationality %}{{ case.target_dob_nationality }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.target_dob_nationality %}{{ task.target_dob_nationality }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Appointed Roles:</td>
-    <td class="kv-value">{% if case.target_appointed_roles %}{{ case.target_appointed_roles }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.target_appointed_roles %}{{ task.target_appointed_roles }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Historic Directorships:</td>
-    <td class="kv-value">{% if case.target_historic_directorships %}{{ case.target_historic_directorships }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.target_historic_directorships %}{{ task.target_historic_directorships }}{% else %}N/A{% endif %}</td>
   </tr>
   <tr>
     <td class="kv-label">Adverse Regulatory Checks:</td>
-    <td class="kv-value">{% if case.target_regulatory_checks %}{{ case.target_regulatory_checks }}{% else %}N/A{% endif %}</td>
+    <td class="kv-value">{% if task.target_regulatory_checks %}{{ task.target_regulatory_checks }}{% else %}N/A{% endif %}</td>
   </tr>
 </table>
 
-{% if case.directorship_track_record_notice %}
+{% if task.directorship_track_record_notice %}
 <div class="callout-warning">
-  <strong>Directorship Track Record Notice:</strong> {{ case.directorship_track_record_notice }}
+  <strong>Directorship Track Record Notice:</strong> {{ task.directorship_track_record_notice }}
 </div>
 {% endif %}
 
@@ -143,20 +143,20 @@ Background analysis was conducted on primary officers to identify corporate trac
 ### 4.1 Court Judgments & Legal Proceedings
 Searches across the Registry Trust (CCJs & High Court Judgments) and official UK insolvency gazettes identified the following:
 
-{% if case.litigation_details_md %}{{ case.litigation_details_md | safe }}{% endif %}
+{% if task.litigation_details_md %}{{ task.litigation_details_md | safe }}{% endif %}
 
 ### 4.2 Real Estate & Asset Footprint
-{% if case.real_estate_details_md %}{{ case.real_estate_details_md | safe }}{% endif %}
+{% if task.real_estate_details_md %}{{ task.real_estate_details_md | safe }}{% endif %}
 
 ---
 
 ## 5. Digital Footprint & Adverse Media Audit
 
 ### 5.1 Infrastructure & Domain Analysis
-{% if case.infrastructure_details_md %}{{ case.infrastructure_details_md | safe }}{% endif %}
+{% if task.infrastructure_details_md %}{{ task.infrastructure_details_md | safe }}{% endif %}
 
 ### 5.2 Media & Social Media Exposure
-{% if case.media_exposure_details_md %}{{ case.media_exposure_details_md | safe }}{% endif %}
+{% if task.media_exposure_details_md %}{{ task.media_exposure_details_md | safe }}{% endif %}
 
 ---
 
@@ -186,7 +186,7 @@ Searches across the Registry Trust (CCJs & High Court Judgments) and official UK
 
 {% endfor %}
 {% else %}
-No findings have been recorded for this case.
+No findings have been recorded for this task.
 {% endif %}
 
 ---
@@ -225,25 +225,25 @@ This investigation utilized structured open-source intelligence (OSINT) analytic
 </table>
 
 <div class="callout-note">
-  <strong>Analytical Limitations:</strong> {{ case.analytical_limitations or "Offshore corporate entities registered in secrecy jurisdictions were assessed solely via publicly available cross-border leaks and UK cross-referencing." }}
+  <strong>Analytical Limitations:</strong> {{ task.analytical_limitations or "Offshore corporate entities registered in secrecy jurisdictions were assessed solely via publicly available cross-border leaks and UK cross-referencing." }}
 </div>
 
 ---
 
 ## 7. Compliance Disclaimers & Legal Notice
 
-1. **UK GDPR & Data Protection Compliance Notice:**  
+1. **UK GDPR & Data Protection Compliance Notice:**
    This document has been prepared in strict compliance with the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018. All personal data contained herein was processed under the lawful basis of **Legitimate Interest** (Art. 6(1)(f) UK GDPR) for the express purpose of legal dispute resolution, corporate fraud prevention, and risk mitigation.
 
-2. **Limitation of Liability & Third-Party Reliance:**  
+2. **Limitation of Liability & Third-Party Reliance:**
    This report was prepared solely for the use of **{{ client.name }}** for the specific purpose stated in Section 1. No third party may rely upon this report without express written consent from **{{ firm.name }}**.
 
-3. **Civil Procedure Rules (CPR Part 35 Disclosure Warning):**  
+3. **Civil Procedure Rules (CPR Part 35 Disclosure Warning):**
    If this report or its underlying evidentiary artifacts are intended for submission in court proceedings, the instructing client must ensure appropriate evidentiary disclosure rules and chain-of-custody verification are adhered to.
 
 <div class="hash-box">
   <strong>Evidentiary Chain of Custody Package Reference:</strong><br>
-  <code>SHA-256 Case Archive Hash: {{ case.sha256_hash or "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991678526855" }}</code>
+  <code>SHA-256 Task Archive Hash: {{ task.sha256_hash or "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991678526855" }}</code>
 </div>
 
 <table class="signoff-table">

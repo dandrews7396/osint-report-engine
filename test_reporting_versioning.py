@@ -64,21 +64,21 @@ def test_generator_renders_final_approval_and_draft_watermark(monkeypatch):
     import reporting.generator as generator
 
     monkeypatch.setattr(generator, "HTML", CapturingHTML)
-    monkeypatch.setattr(generator.db, "get_case_subjects", lambda _case_id: [])
+    monkeypatch.setattr(generator.db, "get_task_subjects", lambda _task_id: [])
     monkeypatch.setattr(generator.db, "get_investigators", lambda: [])
     output_directory = Path("reporting-test-artifacts")
     final_path = output_directory / "final.pdf"
     draft_path = output_directory / "draft.pdf"
-    case = {
+    task = {
         "id": 1,
-        "case_ref": "CASE-42",
-        "case_name": "Example",
-        "case_type": "Custom OSINT Investigation",
+        "task_ref": "CASE-42",
+        "task_name": "Example",
+        "task_type": "Custom OSINT Investigation",
     }
     try:
         generator.generate_report(
-            case, {"name": "Client"}, {"name": "Firm"}, [], final_path,
-            include_risk_graphs=False, status="final", case_start_date="2026-01-01",
+            task, {"name": "Client"}, {"name": "Firm"}, [], final_path,
+            include_risk_graphs=False, status="final", task_start_date="2026-01-01",
             approval_data={"approved_by": "A. Approver", "approved_at": "2026-01-31"},
         )
         final_html = CapturingHTML.rendered[-1]
@@ -87,7 +87,7 @@ def test_generator_renders_final_approval_and_draft_watermark(monkeypatch):
         assert "A. Approver" in final_html
 
         generator.generate_report(
-            case, {"name": "Client"}, {"name": "Firm"}, [], draft_path,
+            task, {"name": "Client"}, {"name": "Firm"}, [], draft_path,
             include_risk_graphs=False, status="draft",
         )
         assert 'content: "DRAFT"' in CapturingHTML.rendered[-1]

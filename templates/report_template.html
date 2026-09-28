@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ case.case_ref }} - Intelligence Report</title>
+    <title>{{ task.task_ref }} - Intelligence Report</title>
     <style>
         @page {
             size: A4;
@@ -255,14 +255,14 @@
             margin: 10px 0 12px 0;
         }
 
-        .case-context-block {
+        .task-context-block {
             border: 1px solid var(--line);
             border-left: 4px solid var(--navy);
             background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
             margin: 10px 0 16px 0;
         }
 
-        .case-context-header {
+        .task-context-header {
             padding: 8px 12px;
             background: var(--navy);
             color: #ffffff;
@@ -272,12 +272,12 @@
             letter-spacing: 0.6px;
         }
 
-        .case-context-row {
+        .task-context-row {
             padding: 10px 12px;
             border-top: 1px solid var(--line);
         }
 
-        .case-context-label {
+        .task-context-label {
             display: block;
             margin-bottom: 4px;
             font-size: 8pt;
@@ -287,7 +287,7 @@
             letter-spacing: 0.35px;
         }
 
-        .case-context-value {
+        .task-context-value {
             color: var(--ink);
         }
 

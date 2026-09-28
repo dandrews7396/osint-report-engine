@@ -1,4 +1,4 @@
-"""Shared access controls and read-only evidence browser for case evidence pages."""
+"""Shared access controls and read-only evidence browser for task evidence pages."""
 
 from dataclasses import dataclass
 
@@ -10,7 +10,7 @@ from utils.helpers import format_lifecycle_status, restore_base64_images, saniti
 
 
 @dataclass(frozen=True)
-class CaseEvidenceAccess:
+class TaskEvidenceAccess:
     can_mutate: bool
     message: str
 
@@ -20,84 +20,84 @@ def current_user_is_manager() -> bool:
     return bool(user and user.get("role") == "manager")
 
 
-def case_evidence_access(case: dict) -> CaseEvidenceAccess:
+def task_evidence_access(task: dict) -> TaskEvidenceAccess:
     """Return the UI mutation permission supplied by the authorization data layer."""
     user = get_current_user()
     if not user:
-        return CaseEvidenceAccess(False, "Sign in before viewing or changing case evidence.")
+        return TaskEvidenceAccess(False, "Sign in before viewing or changing task evidence.")
     if current_user_is_manager():
-        return CaseEvidenceAccess(
+        return TaskEvidenceAccess(
             False,
-            "Managers have read-only cross-case evidence access. Investigator evidence changes are unavailable.",
+            "Managers have read-only cross-task evidence access. Investigator evidence changes are unavailable.",
         )
 
-    access_api = getattr(db, "get_case_evidence_access", None)
+    access_api = getattr(db, "get_task_evidence_access", None)
     if not callable(access_api):
-        return CaseEvidenceAccess(
+        return TaskEvidenceAccess(
             False,
-            "Evidence editing is unavailable until case-access integration is configured "
-            "(database.get_case_evidence_access).",
+            "Evidence editing is unavailable until task-access integration is configured "
+            "(database.get_task_evidence_access).",
         )
 
-    access = access_api(user["username"], case["id"]) or {}
+    access = access_api(user["username"], task["id"]) or {}
     assigned = bool(access.get("assigned", False))
     is_in_progress = bool(access.get("is_in_progress", False))
-    state = format_lifecycle_status(access.get("case_state", access.get("state")))
+    state = format_lifecycle_status(access.get("task_state", access.get("state")))
     if not assigned:
-        return CaseEvidenceAccess(
+        return TaskEvidenceAccess(
             False,
-            f"Read-only: you are not assigned to this case (state: {state}).",
+            f"Read-only: you are not assigned to this task (state: {state}).",
         )
     if not is_in_progress:
-        return CaseEvidenceAccess(
+        return TaskEvidenceAccess(
             False,
-            f"Evidence changes are gated while this case is {state}. "
+            f"Evidence changes are gated while this task is {state}. "
             "Move it to In Progress before adding, editing, or deleting subjects and findings.",
         )
-    return CaseEvidenceAccess(
+    return TaskEvidenceAccess(
         True,
-        f"Evidence editing enabled for your assigned In Progress case (state: {state}).",
+        f"Evidence editing enabled for your assigned In Progress task (state: {state}).",
     )
 
 
 def render_manager_evidence_browser() -> None:
-    """Render a cross-case browser without any mutating controls."""
+    """Render a cross-task browser without any mutating controls."""
     require_page_auth()
     user = get_current_user()
     if not user_has_role(user, "manager"):
-        st.error("Only managers can access the case evidence browser.")
+        st.error("Only managers can access the task evidence browser.")
         return
-    st.title("Cross-Case Evidence Browser")
+    st.title("Cross-Task Evidence Browser")
     st.info("Manager access is read-only. Subjects and findings cannot be changed from this view.")
-    cases = db.get_cases()
-    if not cases:
-        st.info("No active cases are available to browse.")
+    tasks = db.get_tasks()
+    if not tasks:
+        st.info("No active tasks are available to browse.")
         return
 
     choices = {
-        f"[{case.get('case_ref', 'NO-REF')}] {case['case_name']} — {case.get('client_name', 'Unknown client')}": case
-        for case in cases
+        f"[{task.get('task_ref', 'NO-REF')}] {task['task_name']} — {task.get('client_name', 'Unknown client')}": task
+        for task in tasks
     }
-    selected = st.selectbox("Browse case evidence", list(choices), key="manager_evidence_case")
-    case = choices[selected]
-    subjects = db.get_case_subjects(case["id"])
-    findings = db.get_case_findings(case["id"])
+    selected = st.selectbox("Browse task evidence", list(choices), key="manager_evidence_task")
+    task = choices[selected]
+    subjects = db.get_task_subjects(task["id"])
+    findings = db.get_task_findings(task["id"])
 
-    st.caption(f"{len(subjects)} subject(s) and {len(findings)} finding(s) in this case.")
+    st.caption(f"{len(subjects)} subject(s) and {len(findings)} finding(s) in this task.")
     st.subheader("Subjects")
     if not subjects:
-        st.info("No subjects recorded for this case.")
+        st.info("No subjects recorded for this task.")
     for subject in subjects:
         with st.expander(
             f"#{subject['id']} [{subject['subject_type']}] {subject['display_name']} "
-            f"({subject['relationship_to_case']})"
+            f"({subject['relationship_to_task']})"
         ):
             if subject.get("notes"):
                 st.write(f"**Internal notes:** {subject['notes']}")
 
     st.subheader("Findings")
     if not findings:
-        st.info("No findings recorded for this case.")
+        st.info("No findings recorded for this task.")
     for finding in findings:
         with st.expander(
             f"[{finding.get('risk_level', 'Unspecified')}] {finding.get('title', 'Untitled')} "

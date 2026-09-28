@@ -10,7 +10,11 @@ import streamlit as st
 from database import operations as db
 from reporting import management_charts as charts
 from reporting.management_report_pdf import render_management_report_pdf
-from reporting.management_reporting import build_management_report, resolve_period
+from reporting.management_reporting import (
+    build_management_report,
+    management_statistics_csv,
+    resolve_period,
+)
 from utils.auth import get_current_user, require_page_auth, user_has_role
 
 try:
@@ -22,21 +26,21 @@ except AttributeError:
 
 DEFAULT_SECTIONS = (
     "throughput",
-    "case_flow",
+    "task_flow",
     "workload",
     "durations",
     "complexity",
     "personas",
-    "difficult_cases",
+    "difficult_tasks",
 )
 SECTION_LABELS = {
     "throughput": "Lifecycle Throughput",
-    "case_flow": "Case Flow",
-    "workload": "Workload Balance",
+    "task_flow": "Assignment Readiness",
+    "workload": "Workload Distribution",
     "durations": "Lifecycle Duration",
-    "complexity": "Case Complexity",
-    "personas": "Covert Persona Usage",
-    "difficult_cases": "Difficult Cases",
+    "complexity": "Task Complexity",
+    "personas": "Covert Persona Exposure",
+    "difficult_tasks": "Difficult Tasks",
 }
 PRESETS = {
     "Week": "week",
@@ -47,7 +51,7 @@ PRESETS = {
     "Year": "year",
     "Custom": "custom",
 }
-REPORT_CHART_CACHE_VERSION = 4
+REPORT_CHART_CACHE_VERSION = 7
 
 
 def _table(rows: list[dict[str, object]]) -> None:
@@ -162,7 +166,7 @@ def _initialise_state() -> None:
         ("management_report_configuration_expanded", True),
     ):
         st.session_state.setdefault(key, value)
-    if st.session_state.management_report_draft_complexity_choice == "Average per case":
+    if st.session_state.management_report_draft_complexity_choice == "Average per task":
         st.session_state.management_report_draft_complexity_choice = "Average"
 
 
@@ -190,11 +194,16 @@ def _rendered_chart_images(report: dict) -> dict[str, bytes]:
         }
         for row in report["buckets"]
     ]
-    workload_figure = (
-        charts.workload_trend(report["workload"][0])
-        if len(report["workload"]) == 1
-        else charts.workload_bars(report["workload"])
-    )
+    workload_trend_rows = [
+        {
+            "label": report["buckets"][index]["label"],
+            **{
+                row["investigator"]: row["trend"][index]["average"]
+                for row in report["workload"]
+            },
+        }
+        for index in range(len(report["buckets"]))
+    ]
     return {
         "throughput": _chart_png(
             charts.grouped_columns(
@@ -207,21 +216,44 @@ def _rendered_chart_images(report: dict) -> dict[str, bytes]:
                 ],
             )
         ),
-        "case_flow": _chart_png(
-            charts.grouped_columns(
+        "task_flow": _chart_png(
+            charts.assignment_readiness(
                 report["buckets"],
-                [
-                    ("assigned", "Assigned", "#475569"),
-                    ("started", "Started", charts.LIFECYCLE_COLORS["started"]),
-                    ("submitted", "Submitted", charts.LIFECYCLE_COLORS["submitted"]),
-                    ("returned", "Returned", charts.LIFECYCLE_COLORS["returned"]),
-                    ("completed", "Completed", charts.LIFECYCLE_COLORS["completed"]),
-                ],
             )
         ),
-        "workload": _chart_png(workload_figure),
-        "durations": _chart_png(charts.duration_bars(report["durations"])),
-        "personas": _chart_png(charts.persona_bars(report["persona_usage"])),
+        "workload": _chart_png(
+            charts.trend_lines(
+                workload_trend_rows,
+                [
+                    (row["investigator"], row["investigator"], charts.TREND_COLORS[index % len(charts.TREND_COLORS)])
+                    for index, row in enumerate(report["workload"])
+                ],
+                ylabel="Average active tasks",
+            )
+        ),
+        "durations": _chart_png(
+            charts.trend_lines(
+                report["duration_trend"],
+                [
+                    ("Created to Started", "Created to Started", charts.LIFECYCLE_COLORS["started"]),
+                    ("Started to Submitted", "Started to Submitted", charts.LIFECYCLE_COLORS["submitted"]),
+                    ("Final Submission to Completed", "Final Submission to Completed", charts.LIFECYCLE_COLORS["completed"]),
+                    ("Returned to Resubmitted", "Returned to Resubmitted", charts.LIFECYCLE_COLORS["returned"]),
+                ],
+                ylabel="Median days",
+            )
+        ),
+        "complexity": _chart_png(charts.complexity_trends(report["complexity_trend"])),
+        "personas": _chart_png(
+            charts.trend_lines(
+                report["persona_trend"],
+                [
+                    (persona["persona"], persona["persona"], charts.TREND_COLORS[index % len(charts.TREND_COLORS)])
+                    for index, persona in enumerate(report["persona_usage"])
+                ],
+                ylabel="Month-end active exposure",
+            )
+        ),
     }
 
 
@@ -425,7 +457,7 @@ def _render_report_actions() -> str:
         unsafe_allow_html=True,
     )
     widget_key = (
-        "management_report_section_widget_"
+        "management_report_section_widget_v2_"
         f"{st.session_state.management_report_section_reset}"
     )
     selected_section = st.pills(
@@ -441,7 +473,8 @@ def _render_report_actions() -> str:
     if selected_section is None:
         st.session_state.management_report_section_reset += 1
         st.rerun(scope="fragment")
-    return st.session_state.management_report_active_section
+    st.session_state.management_report_active_section = selected_section
+    return selected_section
 
 
 @fragment
@@ -458,6 +491,11 @@ def _render_report(
     )
     if report["coverage_notice"]:
         st.info(report["coverage_notice"])
+    with _panel(
+        "Executive Summary",
+        "Aggregate management information for Senior Leadership and statistical reporting.",
+    ):
+        _table(report["executive_summary"])
     active_section = _render_report_actions()
     if active_section == "throughput":
         with _panel(
@@ -476,55 +514,87 @@ def _render_report(
             ):
                 column.metric(label, report["throughput"][field])
             st.image(chart_images["throughput"], use_container_width=True)
-    if active_section == "case_flow":
-        with _panel("Case Flow", "Assignments and lifecycle movement across the selected period."):
-            st.image(chart_images["case_flow"], use_container_width=True)
+    if active_section == "task_flow":
+        with _panel(
+            "Assignment and Start Readiness",
+            "Assignment activity and the period-end preparation backlog.",
+        ):
+            flow_metrics = st.columns(5)
+            for column, (label, field) in zip(
+                flow_metrics,
+                (
+                    ("New assignments", "new_assignments"),
+                    ("Reassignments", "reassignments"),
+                    ("Started", "started"),
+                    ("Unassigned", "unassigned"),
+                    ("Assigned, not started", "assigned_not_started"),
+                ),
+            ):
+                column.metric(label, report["assignment_flow"][field])
+            st.image(chart_images["task_flow"], use_container_width=True)
     if active_section == "workload":
-        with _panel("Workload Balance", "Average and peak concurrently active assigned cases."):
+        with _panel(
+            "Workload Distribution",
+            "Monthly average concurrent taskload by investigator.",
+        ):
             st.image(chart_images["workload"], use_container_width=True)
             _table(
                 [
                     {
                         "Investigator": row["investigator"],
-                        "Average active cases": row["average"],
-                        "Peak active cases": row["peak"],
+                        "Distinct active tasks": row["distinct_active_tasks"],
                     }
                     for row in report["workload"]
                 ]
             )
     if active_section == "durations":
-        with _panel("Lifecycle Duration", "Average and median elapsed calendar days between lifecycle gates."):
+        with _panel("Lifecycle Duration", "Monthly median elapsed calendar days between lifecycle gates."):
             st.image(chart_images["durations"], use_container_width=True)
             _table(
                 [
                     {
                         "Interval": row["interval"],
-                        "Average days": row["average_days"],
-                        "Median days": row["median_days"],
-                        "Cases": row["case_count"],
+                        "Average days": f"{row['average_days']:.0f}",
+                        "Median days": f"{row['median_days']:.0f}",
+                        "Tasks": row["task_count"],
                     }
                     for row in report["durations"]
                 ]
             )
     if active_section == "complexity":
-        with _panel("Case Complexity", "Subjects and findings included in cases active during the selected period."):
-            value_label = "Average per case" if report["complexity"]["mode"] == "average" else "Total"
-            subjects, findings = st.columns(2)
-            subjects.metric("Subjects", report["complexity"]["subjects"], help=value_label)
-            findings.metric("Findings", report["complexity"]["findings"], help=value_label)
+        with _panel("Task Complexity", "Monthly subject and finding content per active task, with selected-period totals."):
+            st.image(chart_images["complexity"], use_container_width=True)
+            _table(
+                [
+                    {"Measure": "Tasks active during the period", "Value": report["complexity"]["task_count"]},
+                    {"Measure": "Distinct subjects", "Value": report["complexity"]["subjects_total"]},
+                    {"Measure": "Distinct findings", "Value": report["complexity"]["findings_total"]},
+                    {"Measure": "Subjects per active task", "Value": report["complexity"]["subjects_per_task"]},
+                    {"Measure": "Findings per active task", "Value": report["complexity"]["findings_per_task"]},
+                ]
+            )
     if active_section == "personas":
-        with _panel("Covert Persona Usage", "Distinct active investigations using each persona during the selected period."):
+        with _panel("Covert Persona Exposure", "Month-end active task allocations by persona."):
             st.image(chart_images["personas"], use_container_width=True)
-            _table([{"Persona": row["persona"], "Active investigations": row["active_investigations"]} for row in report["persona_usage"]])
-    if active_section == "difficult_cases":
+            _table(
+                [
+                    {
+                        "Persona": row["persona"],
+                        "Distinct active tasks": row["distinct_active_tasks"],
+                        "Latest active exposure": row["latest_active_exposure"],
+                    }
+                    for row in report["persona_usage"]
+                ]
+            )
+    if active_section == "difficult_tasks":
         with _panel(
-            "Difficult Cases",
-            "Five cases most frequently identified as complexity or duration outliers. Ongoing durations are measured as of the report date.",
+            "Difficult Tasks",
+            "Five tasks most frequently identified as complexity or duration outliers. Ongoing durations are measured as of the report date.",
         ):
             _table(
                 [
                 {
-                    "Case": row["case_ref"],
+                    "Task": row["task_ref"],
                     "Investigator": row["investigator"],
                     "Investigation duration (days)": (
                         f"{row['investigation_duration']:.0f}"
@@ -534,7 +604,7 @@ def _render_report(
                     ),
                     "Why included": "; ".join(row["reasons"]),
                 }
-                for row in report["difficult_cases"]
+                for row in report["difficult_tasks"]
                 ]
             )
     attention_items = report["manager_attention"]
@@ -649,5 +719,15 @@ def show_management_summary() -> None:
         data=pdf_bytes,
         file_name="management-reporting.pdf",
         mime="application/pdf",
+        use_container_width=True,
+    )
+    st.download_button(
+        "Download statistical CSV",
+        data=management_statistics_csv(
+            report,
+            scope_label="Whole Team" if configuration["scope"] == "team" else investigator_name,
+        ),
+        file_name="management-reporting-statistics.csv",
+        mime="text/csv",
         use_container_width=True,
     )

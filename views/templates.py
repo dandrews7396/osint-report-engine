@@ -19,8 +19,8 @@ _TEMPLATE_DIRECTORY = Path(__file__).resolve().parent.parent / "templates"
 _DEFAULT_TEMPLATE_PATH = _TEMPLATE_DIRECTORY / "report_template.md"
 
 
-def _custom_template_path(case_type: str) -> Path:
-    safe_type = case_type.replace(" ", "_").replace("/", "_")
+def _custom_template_path(task_type: str) -> Path:
+    safe_type = task_type.replace(" ", "_").replace("/", "_")
     return _TEMPLATE_DIRECTORY / f"report_template_{safe_type}.md"
 
 

@@ -74,9 +74,9 @@ def show_risk_library():
     @fragment
     def render_risk_entries():
         st.title("OSINT Risk & Threat Library")
-        st.write("Manage standardized threat vectors, risk templates, and investigative guidance. These pre-configured templates can be searched, managed, and imported directly into active cases.")
+        st.write("Manage standardized threat vectors, risk templates, and investigative guidance. These pre-configured templates can be searched, managed, and imported directly into active tasks.")
         if is_manager:
-            st.info("Managers can create and edit templates and may retire or restore them. Case evidence remains read-only.")
+            st.info("Managers can create and edit templates and may retire or restore them. Task evidence remains read-only.")
         else:
             st.info("Investigators can create and edit risk templates. Retirement and restoration are manager-only.")
 

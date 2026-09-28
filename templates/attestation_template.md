@@ -5,9 +5,9 @@
 
 </div>
 
-**Date:** {% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %}  
-**Case Reference:** {{ case.case_ref }}  
-**Client:** {{ client.name }}  
+**Date:** {% if task.report_date %}{{ task.report_date }}{% else %}N/A{% endif %}
+**Task Reference:** {{ task.task_ref }}
+**Client:** {{ client.name }}
 
 ---
 
@@ -15,9 +15,9 @@
 
 This letter confirms that **{{ firm.name }}** was formally retained by **{{ client.name }}** to perform an Open Source Intelligence (OSINT) assessment under the following parameters:
 
-> **Target Scope:** {{ case.target_scope or case.case_name }}  
-> **Investigation Window:** {% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} through {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %}  
-> **Assessment Category:** {{ case.case_type }}  
+> **Target Scope:** {{ task.target_scope or task.task_name }}
+> **Investigation Window:** {% if task.start_date %}{{ task.start_date }}{% else %}N/A{% endif %} through {% if task.end_date %}{{ task.end_date }}{% else %}N/A{% endif %}
+> **Assessment Category:** {{ task.task_type }}
 
 ### Compliance & Methodology Statement
 All collection and analysis procedures were conducted exclusively against publicly available information sources in accordance with OSINT standards and supported by a established **Legitimate Interest** framework. No invasive network penetration, illegal access, or non-public data intrusion took place.
@@ -27,12 +27,12 @@ The assessment analyzed open digital footprints, public domain records, external
 
 ### Authorizing Investigator
 
-**{{ investigator.name }}**  
+**{{ investigator.name }}**
 {% if investigator.title %}{{ investigator.title }}<br>{% endif %}
 *{{ firm.name }}*
 
 {% if investigator.description %}
-*Investigator Bio:*  
+*Investigator Bio:*
 {{ investigator.description }}
 {% endif %}
 

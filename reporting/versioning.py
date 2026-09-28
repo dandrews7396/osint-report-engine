@@ -16,7 +16,7 @@ class ReportIntegrityError(RuntimeError):
 
 def build_versioned_output_path(
     output_directory: str | Path,
-    case_reference: str,
+    task_reference: str,
     version: int,
     *,
     status: str,
@@ -25,16 +25,16 @@ def build_versioned_output_path(
     """Return a deterministic artefact path without creating or overwriting it."""
     if version < 1:
         raise ValueError("version must be at least 1")
-    if not case_reference:
-        raise ValueError("case_reference is required for versioned output")
+    if not task_reference:
+        raise ValueError("task_reference is required for versioned output")
     if status not in {"draft", "final"}:
         raise ValueError("status must be either 'draft' or 'final'")
     if not extension.startswith("."):
         extension = f".{extension}"
 
-    safe_reference = re.sub(r"[^A-Za-z0-9._-]+", "_", case_reference).strip("._")
+    safe_reference = re.sub(r"[^A-Za-z0-9._-]+", "_", task_reference).strip("._")
     if not safe_reference:
-        raise ValueError("case_reference must contain a filename-safe character")
+        raise ValueError("task_reference must contain a filename-safe character")
     return Path(output_directory) / f"{safe_reference}_v{version:04d}_{status}{extension}"
 
 

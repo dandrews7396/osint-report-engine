@@ -13,25 +13,25 @@ from utils.auth import get_current_user, require_page_auth, user_has_role, verif
 from views.report_document import render_report_document_actions
 
 
-def _workflow_cases() -> list[dict]:
-    getter = getattr(db, "get_cases_with_workflow", None)
-    return getter() if callable(getter) else db.get_cases()
+def _workflow_tasks() -> list[dict]:
+    getter = getattr(db, "get_tasks_with_workflow", None)
+    return getter() if callable(getter) else db.get_tasks()
 
 
-def _render_final_report(case: dict, user: dict, approval_data: dict) -> dict:
-    reservation = db.reserve_report_version(case["id"], status="final", actor_user_id=user["id"])
+def _render_final_report(task: dict, user: dict, approval_data: dict) -> dict:
+    reservation = db.reserve_report_version(task["id"], status="final", actor_user_id=user["id"])
     output_path = build_versioned_output_path(
-        "reports", case.get("case_ref") or f"case-{case['id']}",
+        "reports", task.get("task_ref") or f"task-{task['id']}",
         reservation["version_number"], status="final",
     )
     output_path.parent.mkdir(exist_ok=True)
-    client = next((item for item in db.get_clients() if item["id"] == case["client_id"]), None)
+    client = next((item for item in db.get_clients() if item["id"] == task["client_id"]), None)
     wrote_artifact = False
     try:
         generate_report(
-            case, client, db.get_settings(), db.get_case_findings(case["id"]),
+            task, client, db.get_settings(), db.get_task_findings(task["id"]),
             include_risk_graphs=True, status="final", approval_data=approval_data,
-            case_start_date=case.get("start_date"), version=reservation["version_number"],
+            task_start_date=task.get("start_date"), version=reservation["version_number"],
             output_directory=output_path.parent,
         )
         wrote_artifact = True
@@ -40,7 +40,7 @@ def _render_final_report(case: dict, user: dict, approval_data: dict) -> dict:
         return db.finalize_report_version_reservation(
             reservation["reservation_id"], actor_user_id=user["id"],
             content_hash=digest, storage_reference=str(output_path),
-            case_start_date=case.get("start_date"), approval_data=approval_data,
+            task_start_date=task.get("start_date"), approval_data=approval_data,
         )
     except Exception:
         if wrote_artifact:
@@ -80,7 +80,7 @@ def _render_feedback(version: dict, user: dict) -> None:
             st.rerun()
 
 
-def _render_review(case: dict, version: dict, user: dict) -> None:
+def _render_review(task: dict, version: dict, user: dict) -> None:
     with st.container(border=True):
         left, right = st.columns((6, 1), vertical_alignment="center")
         left.markdown(f"**Draft v{version['version_number']}**")
@@ -105,12 +105,12 @@ def _render_review(case: dict, version: dict, user: dict) -> None:
                 "signature": signature,
             }
             try:
-                final_report = _render_final_report(case, user, approval_data)
+                final_report = _render_final_report(task, user, approval_data)
                 db.review_report_version(version["id"], "approve", reviewer_user_id=user["id"])
-                db.transition_case_lifecycle(case["id"], "completed", actor_user_id=user["id"])
+                db.transition_task_lifecycle(task["id"], "completed", actor_user_id=user["id"])
                 db.log_audit_event(
                     user["id"], "report.approved", "report_version", version["id"],
-                    {"case_id": case["id"], "final_version": final_report["version_number"]},
+                    {"task_id": task["id"], "final_version": final_report["version_number"]},
                 )
             except (OSError, PermissionError, ValueError) as exc:
                 st.error(f"Unable to approve this report: {exc}")
@@ -123,7 +123,8 @@ def _render_queue_card(version: dict, *, action: str, key: str) -> bool:
     with st.container(border=True):
         left, right = st.columns((6, 1), vertical_alignment="center")
         left.markdown(
-            f"**[{version.get('case_ref', 'NO-REF')}] {version['case_name']}**"
+            f"**{version.get('client_name', 'Unknown client')} · {version.get('operation_name', 'Operation')}**  \n"
+            f"[{version.get('task_ref', 'NO-REF')}] {version['task_name']}"
             f" · {version.get('investigator_name') or 'Unassigned'}"
         )
         return right.button(action, key=key)
@@ -169,8 +170,8 @@ def show_review_reports() -> None:
     version = next((item for item in mine if item["id"] == report_id), None)
     if not version:
         return
-    case = next((item for item in _workflow_cases() if item["id"] == version["case_id"]), None)
-    if not case:
-        st.error("The case for this report is no longer available.")
+    task = next((item for item in _workflow_tasks() if item["id"] == version["task_id"]), None)
+    if not task:
+        st.error("The task for this report is no longer available.")
         return
-    _render_review(case, version, user)
+    _render_review(task, version, user)

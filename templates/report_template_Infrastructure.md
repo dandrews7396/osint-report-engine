@@ -6,28 +6,28 @@
 
 <table class="edd-cover-grid">
   <tr>
-    <td class="label">Case Ref:</td>
-    <td class="value">{{ case.case_ref }}</td>
+    <td class="label">Task Ref:</td>
+    <td class="value">{{ task.task_ref }}</td>
     <td class="label">Classification:</td>
     <td class="value highlight-red">RESTRICTED - TECHNICAL</td>
   </tr>
   <tr>
     <td class="label">Date:</td>
-    <td class="value">{% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.report_date %}{{ task.report_date }}{% else %}N/A{% endif %}</td>
     <td class="label">Target Scope:</td>
-    <td class="value"><strong>{% if case.target_scope %}{{ case.target_scope }}{% else %}N/A{% endif %}</strong></td>
+    <td class="value"><strong>{% if task.target_scope %}{{ task.target_scope }}{% else %}N/A{% endif %}</strong></td>
   </tr>
   <tr>
     <td class="label">Client Name:</td>
     <td class="value">{{ client.name }}</td>
     <td class="label">Assessment Type:</td>
-    <td class="value">{{ case.case_type }}</td>
+    <td class="value">{{ task.task_type }}</td>
   </tr>
   <tr>
     <td class="label">Lead Analyst:</td>
-    <td class="value">{% if case.investigator_name %}{{ case.investigator_name }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.investigator_name %}{{ task.investigator_name }}{% else %}N/A{% endif %}</td>
     <td class="label">Scanning Window:</td>
-    <td class="value">{% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} – {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.start_date %}{{ task.start_date }}{% else %}N/A{% endif %} – {% if task.end_date %}{{ task.end_date }}{% else %}N/A{% endif %}</td>
   </tr>
 </table>
 
@@ -35,12 +35,12 @@
 
 ## 1. Technical Threat Overview
 
-<div class="risk-summary-box {{ case.overall_risk_level | lower | replace(' ', '-') }}">
-  <strong>External Exposure Profile:</strong> {% if case.overall_risk_classification %}{{ case.overall_risk_classification }}{% else %}N/A{% endif %}
+<div class="risk-summary-box {{ task.overall_risk_level | lower | replace(' ', '-') }}">
+  <strong>External Exposure Profile:</strong> {% if task.overall_risk_classification %}{{ task.overall_risk_classification }}{% else %}N/A{% endif %}
 </div>
 
 ### 1.1 Exposure Summary Matrix
-{% if case.findings_matrix_table %}{{ case.findings_matrix_table | safe }}{% else %}{{ findings_table | safe }}{% endif %}
+{% if task.findings_matrix_table %}{{ task.findings_matrix_table | safe }}{% else %}{{ findings_table | safe }}{% endif %}
 
 <div class="executive-assessment-block">
   <strong>Technical Assessment:</strong> {{ firm.executive_summary }}
@@ -53,7 +53,7 @@
 ## 2. Infrastructure & Asset Discovery
 
 ### 2.1 Domain & Network Footprint
-{% if case.infrastructure_details_md %}{{ case.infrastructure_details_md | safe }}{% endif %}
+{% if task.infrastructure_details_md %}{{ task.infrastructure_details_md | safe }}{% endif %}
 
 ---
 
@@ -83,7 +83,7 @@
 
 {% endfor %}
 {% else %}
-No findings have been recorded for this case.
+No findings have been recorded for this task.
 {% endif %}
 
 ---
@@ -92,8 +92,8 @@ No findings have been recorded for this case.
 
 ## 4. Tooling & OSINT Collection Frameworks
 
-{% if case.tools_used_table %}{{ case.tools_used_table | safe }}{% else %}{{ case.tools_used | safe }}{% endif %}
+{% if task.tools_used_table %}{{ task.tools_used_table | safe }}{% else %}{{ task.tools_used | safe }}{% endif %}
 
 <div class="hash-box">
-  <code>SHA-256 Package Hash: {{ case.sha256_hash or "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991678526855" }}</code>
+  <code>SHA-256 Package Hash: {{ task.sha256_hash or "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991678526855" }}</code>
 </div>

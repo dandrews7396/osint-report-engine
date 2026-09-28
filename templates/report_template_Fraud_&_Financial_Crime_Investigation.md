@@ -1,50 +1,52 @@
 <div class="header-container">
   <div class="agency-title">{{ firm.name | upper }}</div>
-  <div class="report-title">{{ case.case_type | upper }} REPORT</div>
+  <div class="report-title">{{ task.task_type | upper }} REPORT</div>
 </div>
 
 <div class="report-shell">
 <table class="edd-cover-grid">
   <tr>
-    <td class="label">Case Name:</td>
-    <td class="value">{{ case.case_name }}</td>
-    <td class="label">Case Reference:</td>
-    <td class="value">{{ case.case_ref }}</td>
+    <td class="label">Task Name:</td>
+    <td class="value">{{ task.task_name }}</td>
+    <td class="label">Task Reference:</td>
+    <td class="value">{{ task.task_ref }}</td>
   </tr>
   <tr>
     <td class="label">Investigation Type:</td>
-    <td class="value">{{ case.case_type }}</td>
+    <td class="value">{{ task.task_type }}</td>
     <td class="label">Prepared For:</td>
     <td class="value">{{ client.name }}</td>
   </tr>
   <tr>
     <td class="label">Covert Persona Reference:</td>
-    <td class="value">{{ case.covert_persona_reference or 'N/A' }}</td>
+    <td class="value">{{ task.covert_persona_reference or 'N/A' }}</td>
     <td class="label">Lead Investigator:</td>
     <td class="value">{{ investigator.name }}{% if investigator.title %} ({{ investigator.title }}){% endif %}</td>
   </tr>
   <tr>
     <td class="label">Investigation Period:</td>
-    <td class="value">{% if case.start_date %}{{ case.start_date }}{% else %}N/A{% endif %} – {% if case.end_date %}{{ case.end_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.start_date %}{{ task.start_date }}{% else %}N/A{% endif %} – {% if task.end_date %}{{ task.end_date }}{% else %}N/A{% endif %}</td>
     <td class="label">Report Date:</td>
-    <td class="value">{% if case.report_date %}{{ case.report_date }}{% else %}N/A{% endif %}</td>
+    <td class="value">{% if task.report_date %}{{ task.report_date }}{% else %}N/A{% endif %}</td>
   </tr>
 </table>
 </div>
 
 ---
 
-## Scope, Legal Basis & Case Context
+**Operation:** {{ task.operation_name or "N/A" }}
 
-<div class="case-context-block">
-  <div class="case-context-header">Case Instruction & Lawful Basis</div>
-  <div class="case-context-row">
-    <span class="case-context-label">Target Scope</span>
-    <div class="case-context-value">{{ case.target_scope if case.target_scope else 'No target scope supplied.' }}</div>
+## Scope, Legal Basis & Task Context
+
+<div class="task-context-block">
+  <div class="task-context-header">Task Instruction & Lawful Basis</div>
+  <div class="task-context-row">
+    <span class="task-context-label">Target Scope</span>
+    <div class="task-context-value">{{ task.target_scope if task.target_scope else 'No target scope supplied.' }}</div>
   </div>
-  <div class="case-context-row">
-    <span class="case-context-label">Legitimate Interest / Legal Basis</span>
-    <div class="case-context-value">{{ case.legitimate_interest if case.legitimate_interest else 'No lawful-basis statement supplied.' }}</div>
+  <div class="task-context-row">
+    <span class="task-context-label">Legitimate Interest / Legal Basis</span>
+    <div class="task-context-value">{{ task.legitimate_interest if task.legitimate_interest else 'No lawful-basis statement supplied.' }}</div>
   </div>
 </div>
 
@@ -52,26 +54,26 @@
 
 ## Executive Summary & Key Findings
 
-{% if case.executive_summary %}
-{{ case.executive_summary }}
+{% if task.executive_summary %}
+{{ task.executive_summary }}
 {% else %}
-No executive summary has been provided for this case.
+No executive summary has been provided for this task.
 {% endif %}
 
 ### Key Findings Summary
-{% if case.key_findings_summary %}
-{{ case.key_findings_summary }}
+{% if task.key_findings_summary %}
+{{ task.key_findings_summary }}
 {% else %}
-No key findings summary has been supplied for this case.
+No key findings summary has been supplied for this task.
 {% endif %}
 
-{{ case.findings_chart | safe }}
+{{ task.findings_chart | safe }}
 
 ---
 
 ## Intelligence Tools & Methodology
 
-{% if case.tools_used_table %}{{ case.tools_used_table | safe }}{% else %}{{ case.tools_used | safe }}{% endif %}
+{% if task.tools_used_table %}{{ task.tools_used_table | safe }}{% else %}{{ task.tools_used | safe }}{% endif %}
 
 ---
 
@@ -81,7 +83,7 @@ No key findings summary has been supplied for this case.
 {% for subject in subjects %}
 ### {{ subject.display_name }}{% if subject.subject_type %} ({{ subject.subject_type }}){% endif %}
 
-- **Relationship to Case:** {{ subject.relationship_to_case }}
+- **Relationship to Task:** {{ subject.relationship_to_task }}
 
 {% if subject.summary_lines %}
 **Subject Details:**
@@ -101,7 +103,7 @@ No linked findings recorded for this subject.
 
 {% endfor %}
 {% else %}
-No subjects have been recorded for this case.
+No subjects have been recorded for this task.
 {% endif %}
 
 ---
@@ -132,5 +134,5 @@ No subjects have been recorded for this case.
 
 {% endfor %}
 {% else %}
-No findings have been recorded for this case.
+No findings have been recorded for this task.
 {% endif %}

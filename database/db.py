@@ -90,10 +90,26 @@ def init_db():
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT
     );
-    CREATE TABLE IF NOT EXISTS cases (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, case_ref TEXT NOT NULL UNIQUE,
-        case_name TEXT NOT NULL, case_type TEXT DEFAULT 'Enhanced Due Diligence',
-        client_id INTEGER NOT NULL, lifecycle_status TEXT NOT NULL DEFAULT 'preparation'
+    CREATE TABLE IF NOT EXISTS operations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER NOT NULL,
+        operation_name TEXT NOT NULL,
+        operation_status TEXT NOT NULL DEFAULT 'open'
+            CHECK (operation_status IN ('open', 'on_hold', 'closed')),
+        description TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_by_user_id INTEGER,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_by_user_id INTEGER,
+        deleted_at TEXT,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, task_ref TEXT NOT NULL UNIQUE,
+        task_name TEXT NOT NULL, task_type TEXT DEFAULT 'Enhanced Due Diligence',
+        operation_id INTEGER NOT NULL, lifecycle_status TEXT NOT NULL DEFAULT 'preparation'
             CHECK (lifecycle_status IN ('preparation', 'in_progress', 'submitted', 'rejected', 'completed')),
         lead_investigator_id INTEGER,
         start_date TEXT, end_date TEXT,
@@ -103,39 +119,39 @@ def init_db():
         investigation_started_by_user_id INTEGER, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         created_by_user_id INTEGER, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_by_user_id INTEGER, deleted_at TEXT,
-        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+        FOREIGN KEY (operation_id) REFERENCES operations(id) ON DELETE CASCADE,
         FOREIGN KEY (lead_investigator_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (investigation_started_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
-    CREATE TABLE IF NOT EXISTS case_persona_references (
+    CREATE TABLE IF NOT EXISTS task_persona_references (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        case_id INTEGER NOT NULL,
+        task_id INTEGER NOT NULL,
         persona_reference TEXT NOT NULL COLLATE NOCASE,
         allocated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (case_id, persona_reference),
-        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE
+        UNIQUE (task_id, persona_reference),
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     );
-    CREATE TABLE IF NOT EXISTS case_subjects (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, case_id INTEGER NOT NULL,
-        subject_type TEXT NOT NULL, relationship_to_case TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS task_subjects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL,
+        subject_type TEXT NOT NULL, relationship_to_task TEXT NOT NULL,
         display_name TEXT NOT NULL, subject_data_json TEXT NOT NULL DEFAULT '{}', notes TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, created_by_user_id INTEGER,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_by_user_id INTEGER,
-        deleted_at TEXT, FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+        deleted_at TEXT, FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
         FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
-    CREATE TABLE IF NOT EXISTS case_findings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, case_id INTEGER NOT NULL, subject_id INTEGER,
+    CREATE TABLE IF NOT EXISTS task_findings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, subject_id INTEGER,
         domain_category TEXT NOT NULL, title TEXT NOT NULL, risk_level TEXT NOT NULL,
         source_confidence TEXT DEFAULT 'High Confidence', summary TEXT, detailed_findings TEXT,
         source TEXT, category_data_json TEXT NOT NULL DEFAULT '{}',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, created_by_user_id INTEGER,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_by_user_id INTEGER,
-        deleted_at TEXT, FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
-        FOREIGN KEY (subject_id) REFERENCES case_subjects(id) ON DELETE SET NULL,
+        deleted_at TEXT, FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (subject_id) REFERENCES task_subjects(id) ON DELETE SET NULL,
         FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
@@ -158,10 +174,10 @@ def init_db():
         FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS report_versions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, case_id INTEGER NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL,
         version_number INTEGER NOT NULL CHECK (version_number > 0),
         status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'final')),
-        content_hash TEXT, storage_reference TEXT, case_start_date TEXT,
+        content_hash TEXT, storage_reference TEXT, task_start_date TEXT,
         approval_data_json TEXT, approved_at TEXT, approved_by TEXT,
         review_status TEXT NOT NULL DEFAULT 'draft'
             CHECK (review_status IN ('draft', 'submitted', 'approved', 'rejected')),
@@ -171,8 +187,8 @@ def init_db():
         reservation_token TEXT UNIQUE, reserved_at TEXT, reserved_by_user_id INTEGER,
         assigned_manager_user_id INTEGER, response_required_by_user_id INTEGER,
         integrity_verified_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        created_by_user_id INTEGER, UNIQUE(case_id, version_number),
-        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+        created_by_user_id INTEGER, UNIQUE(task_id, version_number),
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
         FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (reserved_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
@@ -208,11 +224,14 @@ def init_db():
     CREATE TABLE IF NOT EXISTS login_attempts (
         username TEXT PRIMARY KEY, failed_attempts INTEGER NOT NULL DEFAULT 0, last_attempt REAL
     );
-    CREATE INDEX IF NOT EXISTS idx_cases_status ON cases(lifecycle_status);
-    CREATE INDEX IF NOT EXISTS idx_case_persona_references_usage
-        ON case_persona_references(persona_reference, allocated_at);
-    CREATE INDEX IF NOT EXISTS idx_case_subjects_case_id ON case_subjects(case_id);
-    CREATE INDEX IF NOT EXISTS idx_case_findings_case_id ON case_findings(case_id);
+    CREATE INDEX IF NOT EXISTS idx_operations_client_id ON operations(client_id);
+    CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(operation_status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(lifecycle_status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_operation_id ON tasks(operation_id);
+    CREATE INDEX IF NOT EXISTS idx_task_persona_references_usage
+        ON task_persona_references(persona_reference, allocated_at);
+    CREATE INDEX IF NOT EXISTS idx_task_subjects_task_id ON task_subjects(task_id);
+    CREATE INDEX IF NOT EXISTS idx_task_findings_task_id ON task_findings(task_id);
     CREATE INDEX IF NOT EXISTS idx_audit_events_entity ON audit_events(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_report_versions_review_queue
         ON report_versions(review_status, assigned_manager_user_id, response_required_by_user_id);
