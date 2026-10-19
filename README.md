@@ -101,7 +101,7 @@ Three Compose-managed volumes preserve data across container replacement:
 
 | Volume | Contents |
 |---|---|
-| `osint-data` | SQLite database (`kairos_osint.db`) and evidence uploads |
+| `osint-data` | SQLite database (`osint.db`) and evidence uploads |
 | `osint-reports` | Generated PDF reports |
 | `osint-certs` | Local TLS certificate and private key |
 
@@ -272,13 +272,17 @@ This will start the local Streamlit server. Navigate your web browser to `https:
 - `parsers/`: Contains parsing scripts for integrating external scanner outputs (e.g., Nessus, Burp Suite).
 - `reporting/`: Contains the PDF generation engine (`generator.py`) utilizing WeasyPrint.
 - `templates/`: Contains HTML/Markdown templates used for styling and formatting the generated PDF reports.
-- `data/`: The default directory where the SQLite database (`kairos_osint.db`) and temporary files are stored.
+- `data/`: The default directory where the SQLite database (`osint.db`) and temporary files are stored.
 - `reports/`: The default directory where generated PDF reports are saved.
 - `certs/`: Directory containing your SSL certificates for HTTPS access.
 
 ## Database Note
 
-The application uses a local SQLite database (`data/kairos_osint.db`). On the first run, the database and necessary tables will be created automatically.
+The application uses a local SQLite database (`data/osint.db`). On the first run, the database and necessary tables will be created automatically.
+
+Older deployments using `data/kairos_osint.db` are not automatically renamed or
+migrated. Back up the existing database before upgrading; using the new filename
+does not migrate an older schema.
 
 ## License
 

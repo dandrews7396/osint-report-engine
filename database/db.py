@@ -7,7 +7,7 @@ import time
 
 import streamlit as st
 
-DB_PATH = "data/kairos_osint.db"
+DB_PATH = "data/osint.db"
 ROLES = frozenset({"administrator", "manager", "investigator"})
 
 
