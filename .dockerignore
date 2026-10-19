@@ -9,3 +9,14 @@ data/
 reports/
 certs/
 *.md
+!templates/*.md
+.pytest_cache/
+*.pdf
+*.db
+*.sqlite
+*.sqlite3
+demo/
+seed_demo.py
+test_seed_demo.py
+backup-*/
+my-certs/

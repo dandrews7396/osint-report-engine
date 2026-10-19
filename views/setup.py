@@ -43,7 +43,7 @@ def show_setup():
         else:
             try:
                 hash_pw = ph.hash(password)
-                add_user(normalized_username, hash_pw, is_admin=True)
+                add_user(normalized_username, hash_pw, role="administrator", is_admin=True)
                 st.success(f"Administrator account '{normalized_username}' created. Please log in.")
                 st.rerun()
             except ValueError as e:
