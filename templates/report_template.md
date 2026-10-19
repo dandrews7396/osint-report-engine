@@ -1,141 +1,102 @@
-<div class="header-container">
-  <div class="agency-title">{{ firm.name | upper }}</div>
-  <div class="report-title">{{ task.task_type | upper }} REPORT</div>
+{% macro finding_card(finding) %}
+<div class="brief-finding">
+<div class="brief-finding-heading">
+<div class="brief-eyebrow">{{ finding.category | e }}</div>
+<h3>{{ finding.title | e }}</h3>
+<span class="risk-badge {{ finding.risk_level | e }}">{{ finding.risk_level | e }}</span>
+<span class="brief-confidence">{{ finding.confidence_level | default('Unspecified', true) | e }}</span>
+{% if finding.summary %}<p class="brief-finding-summary">{{ finding.summary | e }}</p>{% endif %}
 </div>
-
-<div class="report-shell">
-<table class="edd-cover-grid">
-  <tr>
-    <td class="label">Task Name:</td>
-    <td class="value">{{ task.task_name }}</td>
-    <td class="label">Task Reference:</td>
-    <td class="value">{{ task.task_ref }}</td>
-  </tr>
-  <tr>
-    <td class="label">Investigation Type:</td>
-    <td class="value">{{ task.task_type }}</td>
-    <td class="label">Prepared For:</td>
-    <td class="value">{{ client.name }}</td>
-  </tr>
-  <tr>
-    <td class="label">Covert Persona Reference:</td>
-    <td class="value">{{ task.covert_persona_reference or 'N/A' }}</td>
-    <td class="label">Lead Investigator:</td>
-    <td class="value">{{ investigator.name }}{% if investigator.title %} ({{ investigator.title }}){% endif %}</td>
-  </tr>
-  <tr>
-    <td class="label">Investigation Period:</td>
-    <td class="value">{% if task.start_date %}{{ task.start_date }}{% else %}N/A{% endif %} – {% if task.end_date %}{{ task.end_date }}{% else %}N/A{% endif %}</td>
-    <td class="label">Report Date:</td>
-    <td class="value">{% if task.report_date %}{{ task.report_date }}{% else %}N/A{% endif %}</td>
-  </tr>
-</table>
-</div>
-
----
-
-**Operation:** {{ task.operation_name or "N/A" }}
-
-## Scope, Legal Basis & Task Context
-
-<div class="task-context-block">
-  <div class="task-context-header">Task Instruction & Lawful Basis</div>
-  <div class="task-context-row">
-    <span class="task-context-label">Target Scope</span>
-    <div class="task-context-value">{{ task.target_scope if task.target_scope else 'No target scope supplied.' }}</div>
-  </div>
-  <div class="task-context-row">
-    <span class="task-context-label">Legitimate Interest / Legal Basis</span>
-    <div class="task-context-value">{{ task.legitimate_interest if task.legitimate_interest else 'No lawful-basis statement supplied.' }}</div>
-  </div>
-</div>
-
----
-
-## Executive Summary & Key Findings
-
-{% if task.executive_summary %}
-{{ task.executive_summary }}
-{% else %}
-No executive summary has been provided for this task.
-{% endif %}
-
-### Key Findings Summary
-{% if task.key_findings_summary %}
-{{ task.key_findings_summary }}
-{% else %}
-No key findings summary has been supplied for this task.
-{% endif %}
-
-{{ task.findings_chart | safe }}
-
----
-
-## Intelligence Tools & Methodology
-
-The following platforms, collection frameworks, and verification tools were used during this assessment:
-
-{% if task.tools_used_table %}{{ task.tools_used_table | safe }}{% else %}{{ task.tools_used | safe }}{% endif %}
-
----
-
-## Subjects & Relevant Subject Findings
-
-{% if subjects %}
-{% for subject in subjects %}
-### {{ subject.display_name }}{% if subject.subject_type %} ({{ subject.subject_type }}){% endif %}
-
-- **Relationship to Task:** {{ subject.relationship_to_task }}
-- **Principal Subject Priority:** {% if subject.relationship_to_task == 'Principal Subject' %}Primary{% else %}Secondary{% endif %}
-
-{% if subject.summary_lines %}
-**Subject Details:**
-{% for label, value in subject.summary_lines %}
-- **{{ label }}:** {{ value }}
-{% endfor %}
-{% endif %}
-
-{% if subject.findings %}
-**Relevant Subject Findings:**
-{% for finding in subject.findings %}
-- **{{ finding.title }}**{% if finding.risk_level %} — {{ finding.risk_level }}{% endif %}{% if finding.confidence_level %} — {{ finding.confidence_level }}{% endif %}
-{% endfor %}
-{% else %}
-No linked findings recorded for this subject.
-{% endif %}
-
-{% endfor %}
-{% else %}
-No subjects have been recorded for this task.
-{% endif %}
-
----
-
-## General Findings & Intelligence Analysis
-
-{% if findings %}
-{% for finding in findings %}
-### {{ finding.title }}
-
-- **Risk Level:** {{ finding.risk_level }}
-- **Source Confidence:** {{ finding.confidence_level }}
-{% if finding.subject_name %}- **Linked Subject:** {{ finding.subject_name }}{% endif %}
-{% if finding.summary %}
-**Executive Summary:** {{ finding.summary }}
-{% endif %}
 {% if finding.category_summary_lines %}
-**Category Details:**
+<dl class="brief-facts brief-finding-facts">
 {% for label, value in finding.category_summary_lines %}
-- **{{ label }}:** {{ value }}
+<div><dt>{{ label | e }}</dt><dd>{{ value | e }}</dd></div>
 {% endfor %}
+</dl>
 {% endif %}
-{% if finding.source %}- **Source:** {{ finding.source }}{% endif %}
 {% if finding.description %}
-**Detailed Findings & Intelligence Analysis:**
+<div class="brief-analysis">
+<div class="brief-eyebrow">Analysis &amp; evidence</div>
 {{ finding.description }}
+</div>
 {% endif %}
+{% if finding.source %}<div class="brief-source"><strong>Source</strong> {{ finding.source | e }}</div>{% endif %}
+</div>
+{% endmacro %}
 
+<div class="brief-report">
+<div class="brief-masthead">
+<div class="brief-eyebrow">{{ firm.name | e }} / Intelligence brief</div>
+<h1>{{ task.task_type | default('OSINT investigation', true) | e }}</h1>
+<p class="brief-deck">{{ task.task_name | e }}</p>
+<div class="brief-reference">{{ task.task_ref | e }} &nbsp; / &nbsp; {{ task.report_date | default('Date not supplied', true) | e }}</div>
+</div>
+
+<dl class="brief-facts brief-engagement">
+<div><dt>Prepared for</dt><dd>{{ client.name | e }}</dd></div>
+<div><dt>Lead investigator</dt><dd>{{ investigator.name | e }}{% if investigator.title %} / {{ investigator.title | e }}{% endif %}</dd></div>
+<div><dt>Investigation period</dt><dd>{{ task.start_date | default('Not supplied', true) | e }} &ndash; {{ task.end_date | default('Not supplied', true) | e }}</dd></div>
+<div><dt>Operation</dt><dd>{{ task.operation_name | default('Not supplied', true) | e }}</dd></div>
+<div><dt>Persona reference</dt><dd>{{ task.covert_persona_reference | default('Not supplied', true) | e }}</dd></div>
+</dl>
+
+<div class="brief-section-heading"><span>01 / Overview</span><h2>The assessment at a glance</h2></div>
+<div class="brief-metrics">
+<div><strong>{{ subjects | length }}</strong><span>Subjects reviewed</span></div>
+<div><strong>{{ findings | length }}</strong><span>Recorded findings</span></div>
+<div><strong>{{ risk_counts['Critical'] + risk_counts['High'] }}</strong><span>High / critical findings</span></div>
+</div>
+<div class="brief-risk-strip">
+{% for risk, count in risk_counts.items() %}
+<span><span class="risk-badge {{ risk }}">{{ risk }}</span> <strong>{{ count }}</strong></span>
 {% endfor %}
-{% else %}
-No findings have been recorded for this task.
+</div>
+<div class="brief-callout"><div class="brief-eyebrow">Executive assessment</div><p>{{ task.executive_summary | default('No executive summary has been provided for this task.', true) | e }}</p></div>
+<div class="brief-recommendations"><div class="brief-eyebrow">Key findings &amp; recommendations</div><p>{{ task.key_findings_summary | default('No key findings summary has been supplied for this task.', true) | e }}</p></div>
+
+<div class="brief-section-heading"><span>02 / Mandate</span><h2>Scope &amp; collection boundaries</h2></div>
+<div class="brief-mandate"><h3>Target scope</h3><p>{{ task.target_scope | default('No target scope supplied.', true) | e }}</p><h3>Legal authority</h3><p>{{ task.legitimate_interest | default('No lawful-basis statement supplied.', true) | e }}</p></div>
+
+<div class="brief-subject-section">
+<div class="brief-section-heading"><span>03 / Subject intelligence</span><h2>Profiles &amp; associated findings</h2></div>
+<p class="brief-section-intro">Findings sit with the subject they concern, ordered by risk within each profile. Risk ratings apply to individual findings, not to the subject as a whole.</p>
+{% for subject in subjects %}
+<div class="brief-subject">
+<div class="brief-profile">
+<div class="brief-eyebrow">{{ subject.subject_type | e }} / Subject {{ loop.index }}</div>
+<h2>{{ subject.display_name | e }}</h2>
+<p class="brief-relationship">{{ subject.relationship_to_task | e }} <span>/ {{ subject.findings | length }} linked finding{% if subject.findings | length != 1 %}s{% endif %}</span></p>
+{% if subject.summary_lines %}
+<dl class="brief-facts">
+{% for label, value in subject.summary_lines %}
+<div><dt>{{ label | e }}</dt><dd>{{ value | e }}</dd></div>
+{% endfor %}
+</dl>
 {% endif %}
+{% if not subject.findings %}
+<p class="brief-empty">No findings are linked to this subject. This does not establish the absence of risk.</p>
+{% endif %}
+</div>
+{% for finding in subject.findings %}
+{{ finding_card(finding) }}
+{% endfor %}
+</div>
+{% else %}
+<p class="brief-empty">No subjects have been recorded for this task.</p>
+{% endfor %}
+</div>
+
+<div class="brief-section-heading"><span>04 / Wider context</span><h2>Unlinked findings</h2></div>
+<p class="brief-section-intro">Task-wide observations and findings without a matching subject profile.</p>
+{% for finding in unlinked_findings %}
+{{ finding_card(finding) }}
+{% else %}
+<p class="brief-empty">No unlinked findings have been recorded.</p>
+{% endfor %}
+
+<div class="brief-methodology">
+<div class="brief-section-heading"><span>05 / Methodology</span><h2>Tools &amp; sources</h2></div>
+<p class="brief-section-intro">Collection methods and platforms recorded by the investigator.</p>
+{% if task.tools_used_table %}{{ task.tools_used_table | safe }}{% else %}<p>No tools have been recorded.</p>{% endif %}
+</div>
+</div>

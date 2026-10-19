@@ -139,6 +139,11 @@ def generate_report(
         for subject in subjects:
             subject['findings'] = findings_by_subject.get(subject['id'], [])
 
+        subject_ids = {subject['id'] for subject in subjects}
+        unlinked_findings = [
+            finding for finding in findings if finding.get('subject_id') not in subject_ids
+        ]
+
         risk_counts = { 'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0 }
 
         for finding in findings:
@@ -211,7 +216,7 @@ def generate_report(
         md_content = md_content.replace('{{ findings.table }}', '{{ findings_table }}')
 
         # --- Risk Level Chart Generation ---
-        if include_risk_graphs:
+        if include_risk_graphs and 'task.findings_chart' in md_content:
             labels = ['Critical', 'High', 'Medium', 'Low', 'Informational']
             counts = [risk_counts.get(risk, 0) for risk in labels]
 
@@ -289,7 +294,7 @@ def generate_report(
 """
         md_content = md_content.replace('{% if findings and findings.detailed_findings %}{{ findings.detailed_findings }}{% endif %}', detailed_findings_md)
         md_content = md_content.replace('{{ findings.detailed_findings }}', detailed_findings_md)
-        env = SandboxedEnvironment()
+        env = SandboxedEnvironment(loader=FileSystemLoader(template_dir))
         template = env.from_string(md_content)
 
         firm_dict = dict(firm) if isinstance(firm, dict) else {f.get('key'): f.get('value') for f in firm} if isinstance(firm, list) else {}
@@ -355,6 +360,8 @@ def generate_report(
             investigator=investigator,
             findings=findings,
             subjects=subjects,
+            unlinked_findings=unlinked_findings,
+            risk_counts=risk_counts,
             findings_table=table_html,
             report={"status": status, "is_final": status == "final", "approval": signoff},
         )

@@ -1328,7 +1328,10 @@ def get_tasks_with_workflow(username: str | None = None, role: str | None = None
             elif user["role"] not in {"administrator", "manager"}:
                 raise PermissionError("Unknown workflow role.")
         rows = conn.execute(
-            f"""SELECT c.*, cl.name AS client_name, o.client_id, o.operation_name, o.operation_status,
+            f"""SELECT c.*, c.legitimate_interest_assessment AS legitimate_interest,
+                       c.executive_assessment AS executive_summary,
+                       c.tools_and_sources_used AS tools_used,
+                       cl.name AS client_name, o.client_id, o.operation_name, o.operation_status,
                        COALESCE(i.name, u.display_name, u.username) AS investigator_name,
                        i.bio AS investigator_description
                 FROM tasks c

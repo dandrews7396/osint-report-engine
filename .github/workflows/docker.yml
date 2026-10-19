@@ -1,0 +1,63 @@
+name: Docker deployment
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start a clean deployment
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Verify HTTPS, report generation and image contents
+        run: |
+          curl --fail --insecure https://127.0.0.1:8443/_stcore/health
+          docker compose exec -T osint python - <<'PY'
+          from pathlib import Path
+          import sqlite3
+          from database.db import init_db, DB_PATH
+          from reporting.generator import generate_report
+
+          assert not Path("seed_demo.py").exists()
+          assert not Path("demo").exists()
+          assert not Path("data/report-review").exists()
+          init_db()
+          with sqlite3.connect(DB_PATH) as conn:
+              assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+              conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)", ("docker_smoke", "persisted"))
+          output = Path("reports/docker-smoke.pdf")
+          generate_report(
+              {"task_ref": "DOCKER-SMOKE", "task_name": "Container smoke test",
+               "task_type": "Custom OSINT Investigation"},
+              {"name": "Smoke Test Client"}, {"name": "Smoke Test Firm"}, [],
+              output, include_risk_graphs=False,
+          )
+          assert output.read_bytes().startswith(b"%PDF-")
+          assert output.stat().st_size > 1000
+          PY
+      - name: Verify persistence across container replacement
+        run: |
+          docker compose up -d --force-recreate --wait --wait-timeout 180
+          docker compose exec -T osint python - <<'PY'
+          from pathlib import Path
+          import sqlite3
+          from database.db import DB_PATH
+
+          with sqlite3.connect(DB_PATH) as conn:
+              assert conn.execute("SELECT value FROM settings WHERE key = 'docker_smoke'").fetchone()[0] == "persisted"
+          assert Path("reports/docker-smoke.pdf").read_bytes().startswith(b"%PDF-")
+          assert Path("certs/key.pem").exists()
+          PY
+      - name: Container logs
+        if: failure()
+        run: docker compose logs
+      - name: Stop test deployment
+        if: always()
+        run: docker compose down

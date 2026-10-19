@@ -16,8 +16,19 @@ env/
 # Databases and temporary data
 data/*
 !data/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+.pytest_cache/
+/backup-*/
+/my-certs/
 
 # Generated reports
+*.pdf
 reports/*
 !reports/.gitkeep
 examples/

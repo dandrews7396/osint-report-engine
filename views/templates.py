@@ -27,15 +27,20 @@ def _custom_template_path(task_type: str) -> Path:
 def show_templates() -> None:
     require_role_page_auth("administrator")
     st.title("Report Templates")
-    st.write("Customize the Markdown report template used for each assessment type.")
+    st.write("Edit the shared editorial layout or customize an individual assessment type.")
 
-    selected_type = st.selectbox("Select Project Type to Edit", _PROJECT_TYPES)
-    custom_template_path = _custom_template_path(selected_type)
+    shared_label = "Shared editorial layout"
+    selected_type = st.selectbox("Select Project Type to Edit", (shared_label, *_PROJECT_TYPES))
+    editing_shared = selected_type == shared_label
+    custom_template_path = _DEFAULT_TEMPLATE_PATH if editing_shared else _custom_template_path(selected_type)
     path_to_read = custom_template_path if custom_template_path.is_file() else _DEFAULT_TEMPLATE_PATH
-    is_custom = path_to_read == custom_template_path
+    is_custom = not editing_shared and path_to_read == custom_template_path
 
-    if is_custom:
+    if editing_shared:
+        st.info("Changes to this layout apply to every report type that includes it.")
+    elif is_custom:
         st.info(f"Editing custom template for: **{selected_type}**")
+        st.caption("The default include uses the shared editorial layout. Replace it only for a type-specific design.")
     else:
         st.info(f"Displaying the default template for: **{selected_type}**")
 
@@ -53,7 +58,7 @@ def show_templates() -> None:
         edited_content = st.text_area("Template Content (Markdown)", key=content_key, height=800)
         save_column, reset_column = st.columns(2)
         with save_column:
-            save_requested = st.form_submit_button("Save Custom Template")
+            save_requested = st.form_submit_button("Save Shared Layout" if editing_shared else "Save Custom Template")
         with reset_column:
             reset_requested = is_custom and st.form_submit_button("Reset to Default")
 
@@ -64,7 +69,7 @@ def show_templates() -> None:
                 st.error(f"Unable to save the custom template: {error}")
             else:
                 st.session_state[loaded_path_key] = str(custom_template_path)
-                st.success(f"Custom template saved for {selected_type}.")
+                st.success("Shared layout saved." if editing_shared else f"Custom template saved for {selected_type}.")
                 st.rerun()
 
         if reset_requested:
